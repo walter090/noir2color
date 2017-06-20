@@ -20,7 +20,7 @@ def load_image(image_file, output_size=(300, 400)):
         """Crop an image.
         To make sure all input images have the same size, we need to resize them.
         Simply use skimage's resize function may distort the image if the original aspect
-        ration and desired ratio differs greatly. Therefore, the solution here is to
+        ratio and desired ratio differs greatly. Therefore, the solution here is to
         crop the image by the longer side and then resize it to the desired output size.
 
         Args:
@@ -28,14 +28,26 @@ def load_image(image_file, output_size=(300, 400)):
             size(tuple): desired output size
 
         Returns:
-
+            resized image
         """
         # find the length of the short side
+        desired_aspect_ratio = size[0] / size[1]
+        aspect_ratio = image.size[1] / image.size[0]
+
         short_side_length = min(image.size)
+        long_side_length = max(image.size)
         short_side = image.size.index(short_side_length)
         crop_size = [0, 0]
-        crop_size[short_side] = short_side_length
-        crop_size[1 - short_side] = short_side_length * size[short_side] / size[1 - short_side]
+        if not np.sign(aspect_ratio - 1) == np.sign(desired_aspect_ratio - 1):
+            crop_size[short_side] = short_side_length
+            crop_size[1 - short_side] = short_side_length * min(size) / max(size)
+        elif max(size) / min(size) > max(image.size) / min(image.size):
+            crop_size[1 - short_side] = long_side_length
+            crop_size[short_side] = long_side_length * min(size) / max(size)
+        else:
+            crop_size[short_side] = short_side_length
+            crop_size[1 - short_side] = short_side_length * max(size) / min(size)
+
         cropped_img = image.crop((0, 0,)+tuple(crop_size))
         return cropped_img
 
