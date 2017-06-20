@@ -22,3 +22,15 @@ def load_image(image_file):
 
 def normalize(img):
     raise NotImplementedError
+
+
+def color2bw(img):
+    """Convert a RGB image to a single channel black and white image
+
+    Args:
+        img(list): 3-D numpy array, RGB image
+
+    Returns:
+        Converted image with gray scale channel
+    """
+    return rgb2gray(img)
