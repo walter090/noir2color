@@ -30,15 +30,12 @@ def load_image(image_file, output_size=(300, 400)):
         Returns:
 
         """
-        # calculate aspect ratio of desired output
-        aspect_ratio = size[0] / size[1]
         # find the length of the short side
         short_side_length = min(image.size)
         short_side = image.size.index(short_side_length)
         crop_size = [0, 0]
         crop_size[short_side] = short_side_length
-        crop_size[1 - short_side] = short_side_length * aspect_ratio if aspect_ratio > 1\
-            else short_side_length / aspect_ratio
+        crop_size[1 - short_side] = short_side_length * size[short_side] / size[1 - short_side]
         cropped_img = image.crop((0, 0,)+tuple(crop_size))
         return cropped_img
 
