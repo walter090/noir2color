@@ -20,8 +20,17 @@ def load_image(image_file):
     return img_as_list
 
 
-def normalize(img):
-    raise NotImplementedError
+def rescale(img):
+    """Pre-processing the RGB image
+    Simple rescaling to the range [0, 1]
+
+    Args:
+        img(list): Natural image in numpy array
+
+    Returns:
+        Scaled image
+    """
+    return img / 255
 
 
 def color2bw(img):
