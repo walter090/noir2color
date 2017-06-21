@@ -6,7 +6,7 @@ import os
 import uuid
 
 
-def load_image(image_file, output_size=(300, 400)):
+def load_image(image_file, output_size=(256, 256)):
     """Function for loading images.
     This function uses Pillow to load image from file and the image
     is then converted to a numpy array for further processing
