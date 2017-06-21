@@ -64,12 +64,15 @@ def download(links, destination='images'):
 
     for img_link in links:
         img_name = img_link.split('/')[-1]
-        req = requests.get(img_link, stream=True, headers=headers)
         # noinspection PyBroadException
+        try:
+            req = requests.get(img_link, stream=True, headers=headers)
+        except Exception:
+            continue
         try:
             with open(os.path.join(destination, img_name), 'wb') as f:
                 f.write(req.content)
-        except Exception:
+        except IOError:
             pass
         print('Downloaded image {}'.format(img_name))
 
