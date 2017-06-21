@@ -2,6 +2,8 @@ from PIL import Image
 from skimage.color import rgb2gray
 from skimage.transform import resize
 import numpy as np
+import os
+import uuid
 
 
 def load_image(image_file, output_size=(300, 400)):
@@ -28,7 +30,7 @@ def load_image(image_file, output_size=(300, 400)):
             size(tuple): desired output size
 
         Returns:
-            resized image
+            numpy array, resized image
         """
         # find the length of the short side
         desired_aspect_ratio = size[0] / size[1]
@@ -55,8 +57,33 @@ def load_image(image_file, output_size=(300, 400)):
     img = crop(img)
     img.load()
     img_as_list = np.asarray(img, dtype='int32').astype('uint8')
-    resized_img = resize(img_as_list, output_size)
+    resized_img = resize(img_as_list, output_size, mode='wrap')
     return resized_img
+
+
+def convert(folder, dest='img_csv', size=(300, 400)):
+    """Convert jpg files to numpy array
+    Save images as numpy arrays to disk
+
+    Args:
+        folder(str): folder where images are stores
+        dest(str): destination of converted csv files
+        size(tuple): size of the output
+
+    Returns:
+        None
+    """
+    img_list = os.listdir(folder)
+    if not os.path.isdir(dest):
+        os.mkdir(dest)
+
+    for img in img_list:
+        try:
+            img_asarray = load_image(os.path.join(folder, img), size)
+        except IOError:
+            print('Cannot find image')
+            continue
+        np.save(os.path.join(dest, uuid.uuid4().hex), img_asarray)
 
 
 def rescale(img):
