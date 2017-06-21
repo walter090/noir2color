@@ -24,10 +24,11 @@ def search(search_term, number=15, size=None):
 
     param = 'tbm=isch&q='
     file_format = '&tbs=ift:jpg'
+    is_photo = '&tbs=itp:photo'
     root = 'https://www.google.com/search?'
 
     joined_search_term = '+'.join(search_term.split(' '))
-    url = root + param + joined_search_term + file_format
+    url = root + param + joined_search_term + file_format + is_photo
 
     if size is not None:
         url = root + '&tbs=isz:' + size_desig[size] + '&tbm=isch&q=' + joined_search_term
@@ -64,8 +65,12 @@ def download(links, destination='images'):
     for img_link in links:
         img_name = img_link.split('/')[-1]
         req = requests.get(img_link, stream=True, headers=headers)
-        with open(os.path.join(destination, img_name), 'wb') as f:
-            f.write(req.content)
+        # noinspection PyBroadException
+        try:
+            with open(os.path.join(destination, img_name), 'wb') as f:
+                f.write(req.content)
+        except Exception:
+            pass
         print('Downloaded image {}'.format(img_name))
 
 
