@@ -31,7 +31,8 @@ def search(search_term, number=15, size=None):
     url = root + param + joined_search_term + file_format + is_photo
 
     if size is not None:
-        url = root + '&tbs=isz:' + size_desig[size] + '&tbm=isch&q=' + joined_search_term
+        params = '&tbs=isz:' + size_desig[size] + ',itp:photo&tbm=isch'
+        url = root + '&q=' + joined_search_term + params
 
     req = Request(url, headers=headers)
     source = urlopen(req).read()
