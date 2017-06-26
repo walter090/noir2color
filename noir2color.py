@@ -54,5 +54,17 @@ def fully_conn(input, name='fully_conn'):
     raise NotImplementedError
 
 
-def deconv(input):
+def deconv(input, ksize, stride, output_size, name='deconv'):
+    """Deconvolution (convolution transpose) layer.
+
+    Args:
+        input(Tensor): Input tensor from the previous layer.
+        ksize(list): 4-D array, filter size.
+        stride(list): 4-D array, stride size.
+        output_size(list): 1-D array, output size of the deconv layer.
+        name(str): Name for the variable scope of this layer.
+
+    Returns:
+        Output tensor.
+    """
     raise NotImplementedError
