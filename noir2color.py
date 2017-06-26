@@ -45,7 +45,9 @@ def lrelu(x, alpha):
     Returns:
         Output tensor
     """
-    return tf.maximum(alpha * x, x)
+    linear = 0.5 * x + 0.5 * tf.abs(x)
+    leaky = 0.5 * alpha * x + 0.5 * alpha * tf.abs(x)
+    return leaky + linear
 
 
 def flatten(x):
