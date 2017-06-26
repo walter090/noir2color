@@ -35,7 +35,7 @@ def conv_pool(x, conv_ksize, conv_stride, pool_ksize,
         return conv
 
 
-def lrelu(x, alpha):
+def lrelu(x, alpha=5):
     """Leaky ReLU activation.
 
     Args:
@@ -64,18 +64,32 @@ def flatten(x):
     return tf.reshape(x, shape=[-1, np.prod(x[1:])])
 
 
-def fully_conn(x, name='fully_conn'):
+def fully_conn(x, output_size, name='fc', activation=True):
     """Fully connected layer, this is is last parts of convnet.
     Fully connect layer requires each image in the batch be flattened.
 
     Args:
         x(Tensor): Input from the previous layer.
+        output_size(int): Output size of the fully connected layer.
         name(str): Name for the fully connected layer variable scope.
+        activation(bool): Set to True to add a leaky relu after fully connected
+            layer.
 
     Returns:
         Output tensor.
     """
-    raise NotImplementedError
+    with tf.variable_scope(name):
+        weights = tf.get_variable(name='fc_w', shape=[x.get_shape()[-1], output_size],
+                                  initializer=tf.truncated_normal_initializer(stddev=0.02))
+        biases = tf.get_variable(name='fc_b', shape=[output_size],
+                                 initializer=tf.constant_initializer(0))
+
+        output = tf.nn.bias_add(tf.matmul(x, weights), biases)
+
+        if activation:
+            output = lrelu(output)
+
+        return output
 
 
 def deconv(x, ksize, stride, output_size, name='deconv'):
