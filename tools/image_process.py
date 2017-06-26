@@ -30,7 +30,7 @@ def load_image(image_file, output_size=(256, 256)):
             size(tuple): desired output size
 
         Returns:
-            numpy array, resized image
+            numpy array, re-sized image
         """
         # find the length of the short side
         desired_aspect_ratio = size[0] / size[1]

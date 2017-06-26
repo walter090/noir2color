@@ -21,7 +21,13 @@ def conv_pool(x, conv_ksize, conv_stride, pool_ksize,
         Output tensor
     """
     with tf.variable_scope(name):
-        convoluted = tf.nn.conv2d(x, filter=conv_ksize, strides=conv_stride, padding='SAME')
+        weights = tf.get_variable(name='conv_w', shape=conv_ksize,
+                                  initializer=tf.truncated_normal_initializer(stddev=0.02))
+        bias = tf.get_variable(name='conv_b', shape=[conv_ksize[-1]],
+                               initializer=tf.constant_initializer(0))
+
+        convoluted = tf.nn.conv2d(x, filter=weights, strides=conv_stride, padding='SAME')
+        convoluted = convoluted + bias
         conv = lrelu(convoluted, alpha)
 
         if pooling:
@@ -29,19 +35,17 @@ def conv_pool(x, conv_ksize, conv_stride, pool_ksize,
         return conv
 
 
-def lrelu(x, alpha, name='lrelu'):
+def lrelu(x, alpha):
     """Leaky ReLU activation.
 
     Args:
         x(Tensor): Input from the previous layer.
         alpha(float): Parameter for if x < 0.
-        name(str): Name for the variable scope.
 
     Returns:
         Output tensor
     """
-    with tf.variable_scope(name):
-        return tf.maximum(alpha * x, x)
+    return tf.maximum(alpha * x, x)
 
 
 def flatten(x):
