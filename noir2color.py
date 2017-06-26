@@ -44,6 +44,20 @@ def lrelu(x, alpha, name='lrelu'):
         return tf.maximum(alpha * x, x)
 
 
+def flatten(x):
+    """Flatten a tensor for the fully connected layer.
+    Each image in a batch is flattened.
+
+    Args:
+        x(Tensor): 4-D tensor of shape [batch, height, width, channels] to be flattened
+            to the shape of [batch, height * width * channels]
+
+    Returns:
+        Flattened tensor.
+    """
+    return tf.reshape(x, shape=[-1, np.prod(x[1:])])
+
+
 def fully_conn(x, name='fully_conn'):
     """Fully connected layer, this is is last parts of convnet.
     Fully connect layer requires each image in the batch be flattened.
