@@ -2,17 +2,14 @@ import tensorflow as tf
 import numpy as np
 
 
-def conv_pool(input, conv_ksize, conv_stride,
-              out_channels, pool_ksize, pool_stride,
-              alpha=5, pooling=True, name='conv'):
+def conv_pool(x, conv_ksize, conv_stride, pool_ksize,
+              pool_stride, alpha=5, pooling=True, name='conv'):
     """Convolution-LReLU-average pooling layers
 
     Args:
-        input(Tensor): Input from the previous layer.
+        x(Tensor): Input from the previous layer.
         conv_ksize(list): 4-D array, ksize for the convolution layer.
         conv_stride(list): 4-D array, stride for the convolution layer.
-        out_channels(int): Number of output channels for the convolution layers, i.e.
-            number of filters.
         pool_ksize(list): 4-D array, ksize for the average pooling layer.
         pool_stride(list): 4-D array, stride for the average pooling layer.
         alpha(float): Parameter for Leaky ReLU
@@ -23,29 +20,36 @@ def conv_pool(input, conv_ksize, conv_stride,
     Returns:
         Output tensor
     """
-    raise NotImplementedError
+    with tf.variable_scope(name):
+        convoluted = tf.nn.conv2d(x, filter=conv_ksize, strides=conv_stride, padding='SAME')
+        conv = lrelu(convoluted, alpha)
+
+        if pooling:
+            conv = tf.nn.avg_pool(conv, ksize=pool_ksize, strides=pool_stride, padding='SAME')
+        return conv
 
 
-def lrelu(input, alpha, name='lrelu'):
+def lrelu(x, alpha, name='lrelu'):
     """Leaky ReLU activation.
 
     Args:
-        input(Tensor): Input from the previous layer.
-        alpha(int): Parameter for if x < 0.
+        x(Tensor): Input from the previous layer.
+        alpha(float): Parameter for if x < 0.
         name(str): Name for the variable scope.
 
     Returns:
         Output tensor
     """
-    raise NotImplementedError
+    with tf.variable_scope(name):
+        return tf.maximum(alpha * x, x)
 
 
-def fully_conn(input, name='fully_conn'):
+def fully_conn(x, name='fully_conn'):
     """Fully connected layer, this is is last parts of convnet.
     Fully connect layer requires each image in the batch be flattened.
 
     Args:
-        input(Tensor): Input from the previous layer.
+        x(Tensor): Input from the previous layer.
         name(str): Name for the fully connected layer variable scope.
 
     Returns:
@@ -54,11 +58,11 @@ def fully_conn(input, name='fully_conn'):
     raise NotImplementedError
 
 
-def deconv(input, ksize, stride, output_size, name='deconv'):
+def deconv(x, ksize, stride, output_size, name='deconv'):
     """Deconvolution (convolution transpose) layer.
 
     Args:
-        input(Tensor): Input tensor from the previous layer.
+        x(Tensor): Input tensor from the previous layer.
         ksize(list): 4-D array, filter size.
         stride(list): 4-D array, stride size.
         output_size(list): 1-D array, output size of the deconv layer.
