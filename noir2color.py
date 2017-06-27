@@ -126,8 +126,8 @@ def deconv(x, ksize, stride, output_shape=None, padding='SAME', name='deconv'):
             stride_w = stride[2]
             input_h = x.get_shape()[1]
             input_w = x.get_shape()[2]
-            filter_h = ksize[1]
-            filter_w = ksize[2]
+            filter_h = ksize[0]
+            filter_w = ksize[1]
 
             output_shape = [n for n in x.get_shape()]
             output_shape[-1] = ksize[-1]  # number of kernels
