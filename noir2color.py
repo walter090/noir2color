@@ -145,4 +145,4 @@ def deconv(x, ksize, stride, output_shape=None, padding='SAME', name='deconv'):
 
         deconvolved = tf.nn.conv2d_transpose(x, filter=weights, output_shape=output_shape,
                                              strides=stride, padding='SAME')
-        return deconvolved
+        return tf.nn.bias_add(deconvolved, biases)
