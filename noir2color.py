@@ -146,21 +146,22 @@ def deconv(x, ksize, stride, output_shape=None, padding='SAME', name='deconv'):
                                  "default padding")
 
         deconvolved = tf.nn.conv2d_transpose(x, filter=weights, output_shape=output_shape,
-                                             strides=stride, padding='SAME')
+                                             strides=stride, padding=padding)
         deconv_out = tf.nn.bias_add(deconvolved, biases)
         return deconv_out
 
 
-def batch_normalize(x):
+def batch_normalize(x, epsilon=1e-5):
     """Batch normalization for the network.
 
     Args:
         x: Input tensor from the previous layer.
+        epsilon: Variance epsilon.
 
     Returns:
         Output tensor.
     """
-    # After conv layer, before activation
+    # Before activation
     with tf.variable_scope('batch_norm'):
         mean, variance = tf.nn.moments(x, axes=[0])
 
@@ -173,5 +174,5 @@ def batch_normalize(x):
                                                variance=variance,
                                                offset=offset,
                                                scale=scale,
-                                               variance_epsilon=1e-5)
+                                               variance_epsilon=epsilon)
         return normalized
