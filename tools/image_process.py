@@ -61,9 +61,9 @@ def load_image(image_file, output_size=(256, 256)):
     return resized_img
 
 
-def convert(folder, dest='img_csv', size=(300, 400)):
-    """Convert jpg files to numpy array
-    Save images as numpy arrays to disk
+def convert(folder, dest='img_np', bw_dest='img_bw', size=(300, 400)):
+    """Convert jpg files to numpy array.
+    Save images as numpy arrays to disk.
 
     Args:
         folder(str): folder where images are stores
@@ -76,6 +76,8 @@ def convert(folder, dest='img_csv', size=(300, 400)):
     img_list = os.listdir(folder)
     if not os.path.isdir(dest):
         os.mkdir(dest)
+    if not os.path.isdir(bw_dest):
+        os.mkdir(bw_dest)
 
     for img in img_list:
         try:
@@ -83,7 +85,12 @@ def convert(folder, dest='img_csv', size=(300, 400)):
         except IOError:
             print('Cannot find image')
             continue
-        np.save(os.path.join(dest, uuid.uuid4().hex), img_asarray)
+
+        img_bw = color2bw(img_asarray)
+
+        img_id = uuid.uuid4().hex
+        np.save(os.path.join(dest, img_id), img_asarray)
+        np.save(os.path.join(bw_dest, img_id + '_bw'), img_bw)
 
 
 def rescale(img):
