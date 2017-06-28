@@ -66,9 +66,10 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(300, 400)):
     Save images as numpy arrays to disk.
 
     Args:
-        folder(str): folder where images are stores
-        dest(str): destination of converted csv files
-        size(tuple): size of the output
+        folder(str): Folder where images are stores.
+        dest(str): Destination of converted csv files.
+        bw_dest(str): Destination for black and white images.
+        size(tuple): Size of the output.
 
     Returns:
         None
