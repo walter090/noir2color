@@ -1,5 +1,8 @@
 import tensorflow as tf
 import numpy as np
+from tools import image_process
+from tensorflow.python.framework import ops
+from tensorflow.python.framework import dtypes
 
 
 def conv_avg_pool(x,
@@ -14,11 +17,11 @@ def conv_avg_pool(x,
 
     Args:
         x(Tensor): Input from the previous layer.
-        conv_ksize(list): ksize for the convolution layer. ksize should be in the
+        conv_ksize(list): Filter size for the convolution layer. ksize should be in the
             shape of [filter_height, filter_width, in_channels, out_channels]
-        conv_stride(list): stride for the convolution layer.
-        pool_ksize(list): ksize for the average pooling layer.
-        pool_stride(list): stride for the average pooling layer.
+        conv_stride(list): Stride for the convolution layer.
+        pool_ksize(list): Filter size for the average pooling layer.
+        pool_stride(list): Stride for the average pooling layer.
         alpha(float): Parameter for Leaky ReLU
         pooling(bool): If set to False, a pooling layer will not be added after the conv
             layer and pooling parameters will be ignored
@@ -105,8 +108,8 @@ def deconv(x, ksize, stride, output_shape=None, padding='SAME', name='deconv'):
 
     Args:
         x(Tensor): Input tensor from the previous layer.
-        ksize(list): filter size.
-        stride(list): stride size.
+        ksize(list): Filter size.
+        stride(list): Stride size.
         output_shape(list): 1-D array, output size of the deconv layer. Default None,
             if this argument is left as None, an output shape will be calculated.
         padding(str): Padding method for the deconvolution, choose between 'SAME' and
@@ -176,3 +179,17 @@ def batch_normalize(x, epsilon=1e-5):
                                                scale=scale,
                                                variance_epsilon=epsilon)
         return normalized
+
+
+def input_pipeline(folder, batch_size, test_size=0.1):
+    """Pipeline for inputting dataset.
+
+    Args:
+        folder: Directory to the unprocessed images.
+        batch_size: Batch size.
+        test_size: Test set size, float between 0 and 1, default 0.1
+
+    Returns:
+
+    """
+    raise NotImplementedError
