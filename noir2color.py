@@ -10,11 +10,12 @@ def conv_avg_pool(x,
                   alpha=5,
                   pooling=True,
                   name='conv'):
-    """Convolution-LReLU-average pooling layers
+    """Convolution-LReLU-average pooling layers.
 
     Args:
         x(Tensor): Input from the previous layer.
-        conv_ksize(list): ksize for the convolution layer.
+        conv_ksize(list): ksize for the convolution layer. ksize should be in the
+            shape of [filter_height, filter_width, in_channels, out_channels]
         conv_stride(list): stride for the convolution layer.
         pool_ksize(list): ksize for the average pooling layer.
         pool_stride(list): stride for the average pooling layer.
@@ -30,7 +31,7 @@ def conv_avg_pool(x,
         weights = tf.get_variable(name='conv_w', shape=conv_ksize,
                                   initializer=tf.truncated_normal_initializer(stddev=0.02))
         bias = tf.get_variable(name='conv_b', shape=[conv_ksize[-1]],
-                               initializer=tf.constant_initializer(0))
+                               initializer=tf.zeros_initializer())
 
         convoluted = tf.nn.conv2d(x, filter=weights, strides=conv_stride, padding='VALID')
         convoluted = convoluted + bias
@@ -53,7 +54,8 @@ def lrelu(x, alpha=5):
     """
     linear = 0.5 * x + 0.5 * tf.abs(x)
     leaky = 0.5 * alpha * x + 0.5 * alpha * tf.abs(x)
-    return leaky + linear
+    output = leaky + linear
+    return output
 
 
 def flatten(x):
@@ -88,7 +90,7 @@ def fully_conn(x, output_size, name='fc', activation=True):
         weights = tf.get_variable(name='fc_w', shape=[x.get_shape()[-1], output_size],
                                   initializer=tf.truncated_normal_initializer(stddev=0.02))
         biases = tf.get_variable(name='fc_b', shape=[output_size],
-                                 initializer=tf.constant_initializer(0))
+                                 initializer=tf.zeros_initializer())
 
         output = tf.nn.bias_add(tf.matmul(x, weights), biases)
 
@@ -118,7 +120,7 @@ def deconv(x, ksize, stride, output_shape=None, padding='SAME', name='deconv'):
         weights = tf.get_variable(name='deconv_w', shape=ksize,
                                   initializer=tf.truncated_normal_initializer(stddev=0.02))
         biases = tf.get_variable(name='deconv_b', shape=ksize[-1],
-                                 initializer=tf.constant_initializer(0))
+                                 initializer=tf.zeros_initializer())
 
         if output_shape is None:
             # if output_shape is not provided, compute default value
@@ -145,4 +147,31 @@ def deconv(x, ksize, stride, output_shape=None, padding='SAME', name='deconv'):
 
         deconvolved = tf.nn.conv2d_transpose(x, filter=weights, output_shape=output_shape,
                                              strides=stride, padding='SAME')
-        return tf.nn.bias_add(deconvolved, biases)
+        deconv_out = tf.nn.bias_add(deconvolved, biases)
+        return deconv_out
+
+
+def batch_normalize(x):
+    """Batch normalization for the network.
+
+    Args:
+        x: Input tensor from the previous layer.
+
+    Returns:
+        Output tensor.
+    """
+    # After conv layer, before activation
+    with tf.variable_scope('batch_norm'):
+        mean, variance = tf.nn.moments(x, axes=[0])
+
+        scale = tf.get_variable('bn_scale', shape=[x.get_shape()[-1]],
+                                initializer=tf.random_normal_initializer())
+        offset = tf.get_variable('bn_bias', shape=[x.get_shape()[-1]],
+                                 initializer=tf.zeros_initializer())
+        normalized = tf.nn.batch_normalization(x=x,
+                                               mean=mean,
+                                               variance=variance,
+                                               offset=offset,
+                                               scale=scale,
+                                               variance_epsilon=1e-5)
+        return normalized
