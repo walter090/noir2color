@@ -80,6 +80,8 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(300, 400)):
     if not os.path.isdir(bw_dest):
         os.mkdir(bw_dest)
 
+    # Auto incremental id for images
+    img_id = 0
     for img in img_list:
         try:
             img_asarray = load_image(os.path.join(folder, img), size)
@@ -89,9 +91,10 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(300, 400)):
 
         img_bw = color2bw(img_asarray)
 
-        img_id = uuid.uuid4().hex
-        np.save(os.path.join(dest, img_id), img_asarray)
-        np.save(os.path.join(bw_dest, img_id + '_bw'), img_bw)
+        np.save(os.path.join(dest, str(img_id)), img_asarray)
+        np.save(os.path.join(bw_dest, str(img_id) + '_bw'), img_bw)
+
+        img_id += 1
 
 
 def rescale(img):

@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import os
 from tools import image_process
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import dtypes
@@ -192,4 +193,4 @@ def input_pipeline(folder, batch_size, test_size=0.1):
     Returns:
 
     """
-    raise NotImplementedError
+    img_list = os.listdir(folder)
