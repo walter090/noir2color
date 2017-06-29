@@ -87,7 +87,7 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256)):
         try:
             img_asarray = load_image(os.path.join(folder, img), size)
         except IOError:
-            print('Cannot find image')
+            print('Cannot load image {}'.format(img))
             continue
 
         img_bw = color2bw(img_asarray)
