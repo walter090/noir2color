@@ -1,9 +1,10 @@
+import os
+
+import numpy as np
 from PIL import Image
 from skimage.color import rgb2gray
 from skimage.transform import resize
-import numpy as np
-import os
-import uuid
+import scipy.misc
 
 
 def load_image(image_file, output_size=(256, 256)):
@@ -61,9 +62,9 @@ def load_image(image_file, output_size=(256, 256)):
     return resized_img
 
 
-def convert(folder, dest='img_np', bw_dest='img_bw', size=(300, 400)):
+def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256)):
     """Convert jpg files to numpy array.
-    Save images as numpy arrays to disk.
+    Save images as jpeg to disk.
 
     Args:
         folder(str): Folder where images are stores.
@@ -91,8 +92,9 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(300, 400)):
 
         img_bw = color2bw(img_asarray)
 
-        np.save(os.path.join(dest, str(img_id)), img_asarray)
-        np.save(os.path.join(bw_dest, str(img_id) + '_bw'), img_bw)
+        extension = '.jpg'
+        scipy.misc.toimage(img_asarray).save(os.path.join(dest, str(img_id)) + extension)
+        scipy.misc.toimage(img_bw).save(os.path.join(bw_dest, str(img_id) + '_bw') + extension)
 
         img_id += 1
 
