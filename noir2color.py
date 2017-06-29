@@ -1,9 +1,10 @@
-import tensorflow as tf
-import numpy as np
 import os
-from tools import image_process
-from tensorflow.python.framework import ops
+
+import numpy as np
+import tensorflow as tf
 from tensorflow.python.framework import dtypes
+from tensorflow.python.framework import ops
+from random import shuffle
 
 
 def conv_avg_pool(x,
@@ -182,15 +183,82 @@ def batch_normalize(x, epsilon=1e-5):
         return normalized
 
 
-def input_pipeline(folder, batch_size, test_size=0.1):
-    """Pipeline for inputting dataset.
+def process_data(folder, bw_folder, test_size=0.1):
+    """Read and partition data.
 
     Args:
         folder: Directory to the unprocessed images.
-        batch_size: Batch size.
+        bw_folder: Directory to the black and white images.
         test_size: Test set size, float between 0 and 1, default 0.1
+
+    Returns:
+        A dictionary of tensors containing image file names.
+    """
+    img_list = sorted(os.listdir(folder))
+    bw_img_list = sorted(os.listdir(bw_folder))
+    total_samples = len(img_list)
+    total_test_size = int(test_size * total_samples)
+
+    # List of image file names.
+    colored_images = ops.convert_to_tensor(img_list, dtype=dtypes.string)
+    bw_images = ops.convert_to_tensor(bw_img_list, dtype=dtypes.string)
+
+    # Partition images into training and testing
+    partition = [0] * total_samples
+    partition[: total_test_size] = [1] * total_test_size
+    shuffle(partition)
+    train_colored_images, test_colored_images =\
+        tf.dynamic_partition(colored_images, partition, num_partitions=2)
+    train_bw_images, test_bw_images =\
+        tf.dynamic_partition(bw_images, partition, num_partitions=2)
+
+    return {'train': (train_bw_images, train_colored_images),
+            'test': (test_bw_images, test_colored_images)}
+
+
+def input_pipeline(images_dict, batch_size=50):
+    """Pipeline for inputting images.
+
+    Args:
+        images_dict: Python dictionary containing string typed tensors that
+            are image file names. The dictionary comes in the shape of
+            {'train': (train_bw_images, train_colored_images),
+            'test': (test_bw_images, test_colored_images)}
+        batch_size: Size of each batch, default 50.
 
     Returns:
 
     """
-    img_list = os.listdir(folder)
+    def read_image(input_queue):
+        """Read images from specified files.
+
+        Args:
+            input_queue: Tensor of type string that contains image file names.
+
+        Returns:
+            Two tensors, black and white and colored images read from the files.
+        """
+        bw_img_file = tf.read_file(input_queue[0])
+        colored_img_file = tf.read_file(input_queue[1])
+        bw_img = tf.image.decode_jpeg(bw_img_file, channels=1)  # Decode as grayscale
+        colored_img = tf.image.decode_jpeg(colored_img_file, channels=3)  # Decode as RGB
+
+        return bw_img, colored_img
+
+    train_bw_images, train_colored_images = images_dict['train']
+    test_bw_images, test_colored_images = images_dict['test']
+
+    # Create an input queue, a queue of string tensors that are image file names.
+    train_input_queue = tf.train.slice_input_producer([train_bw_images, train_colored_images])
+    test_input_queue = tf.train.slice_input_producer([test_bw_images, test_colored_images])
+
+    train_bw_img, train_colored_img = read_image(train_input_queue)
+    test_bw_img, test_colored_img = read_image(test_input_queue)
+
+    train_bw_batch, train_colored_batch =\
+        tf.train.batch([train_bw_img, train_colored_img], batch_size=batch_size)
+    test_bw_batch, test_colored_batch =\
+        tf.train.batch([test_bw_img, test_colored_img], batch_size=batch_size)
+
+    return {'train': (train_bw_batch, train_colored_batch),
+            'test': (test_bw_batch, test_colored_batch)}
