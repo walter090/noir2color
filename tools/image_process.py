@@ -94,7 +94,7 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256)):
 
         extension = '.jpg'
         scipy.misc.toimage(img_asarray).save(os.path.join(dest, str(img_id)) + extension)
-        scipy.misc.toimage(img_bw).save(os.path.join(bw_dest, str(img_id) + '_bw') + extension)
+        scipy.misc.toimage(img_bw).save(os.path.join(bw_dest, str(img_id)) + extension)
 
         img_id += 1
 
