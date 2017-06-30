@@ -197,6 +197,9 @@ def process_data(folder, bw_folder, test_size=0.1):
     """
     img_list = sorted(os.listdir(folder))
     bw_img_list = sorted(os.listdir(bw_folder))
+    img_list = [os.path.join(folder, img) for img in img_list]
+    bw_img_list = [os.path.join(bw_folder, img) for img in bw_img_list]
+
     total_samples = len(img_list)
     total_test_size = int(test_size * total_samples)
 
@@ -208,6 +211,7 @@ def process_data(folder, bw_folder, test_size=0.1):
     partition = [0] * total_samples
     partition[: total_test_size] = [1] * total_test_size
     shuffle(partition)
+
     train_colored_images, test_colored_images =\
         tf.dynamic_partition(colored_images, partition, num_partitions=2)
     train_bw_images, test_bw_images =\
@@ -250,7 +254,7 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
         bw_img_.set_shape([height, width, 1])
         colored_img_.set_shape([height, width, 3])
 
-        return bw_img, colored_img
+        return bw_img_, colored_img_
 
     bw_images, colored_images = images_tuple
 
