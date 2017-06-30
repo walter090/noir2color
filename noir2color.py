@@ -185,6 +185,7 @@ def batch_normalize(x, epsilon=1e-5):
 
 def process_data(folder, bw_folder, test_size=0.1):
     """Read and partition data.
+    This function should be run before the input pipeline.
 
     Args:
         folder: Directory to the unprocessed images.
@@ -216,49 +217,48 @@ def process_data(folder, bw_folder, test_size=0.1):
             'test': (test_bw_images, test_colored_images)}
 
 
-def input_pipeline(images_dict, batch_size=50):
+def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
     """Pipeline for inputting images.
 
     Args:
-        images_dict: Python dictionary containing string typed tensors that
+        images_tuple: Python dictionary containing string typed tensors that
             are image file names. The dictionary comes in the shape of
             {'train': (train_bw_images, train_colored_images),
             'test': (test_bw_images, test_colored_images)}
+        height: Height of the image.
+        width: Width of the image.
         batch_size: Size of each batch, default 50.
 
     Returns:
-
+        A tuple of black and white image batch and colored image patch.
     """
-    def read_image(input_queue):
+    def read_image(input_queue_):
         """Read images from specified files.
 
         Args:
-            input_queue: Tensor of type string that contains image file names.
+            input_queue_: Tensor of type string that contains image file names.
 
         Returns:
             Two tensors, black and white and colored images read from the files.
         """
-        bw_img_file = tf.read_file(input_queue[0])
-        colored_img_file = tf.read_file(input_queue[1])
-        bw_img = tf.image.decode_jpeg(bw_img_file, channels=1)  # Decode as grayscale
-        colored_img = tf.image.decode_jpeg(colored_img_file, channels=3)  # Decode as RGB
+        bw_img_file = tf.read_file(input_queue_[0])
+        colored_img_file = tf.read_file(input_queue_[1])
+        bw_img_ = tf.image.decode_jpeg(bw_img_file, channels=1)  # Decode as grayscale
+        colored_img_ = tf.image.decode_jpeg(colored_img_file, channels=3)  # Decode as RGB
+
+        # decode_jpeg somehow does not return shape of the image, need to manually set
+        bw_img_.set_shape([height, width, 1])
+        colored_img_.set_shape([height, width, 3])
 
         return bw_img, colored_img
 
-    train_bw_images, train_colored_images = images_dict['train']
-    test_bw_images, test_colored_images = images_dict['test']
+    bw_images, colored_images = images_tuple
 
     # Create an input queue, a queue of string tensors that are image file names.
-    train_input_queue = tf.train.slice_input_producer([train_bw_images, train_colored_images])
-    test_input_queue = tf.train.slice_input_producer([test_bw_images, test_colored_images])
+    input_queue = tf.train.slice_input_producer([bw_images, colored_images])
 
-    train_bw_img, train_colored_img = read_image(train_input_queue)
-    test_bw_img, test_colored_img = read_image(test_input_queue)
+    bw_img, colored_img = read_image(input_queue)
+    bw_batch, colored_batch = tf.train.batch([bw_img, colored_img],
+                                             batch_size=batch_size)
 
-    train_bw_batch, train_colored_batch =\
-        tf.train.batch([train_bw_img, train_colored_img], batch_size=batch_size)
-    test_bw_batch, test_colored_batch =\
-        tf.train.batch([test_bw_img, test_colored_img], batch_size=batch_size)
-
-    return {'train': (train_bw_batch, train_colored_batch),
-            'test': (test_bw_batch, test_colored_batch)}
+    return bw_batch, colored_batch
