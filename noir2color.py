@@ -195,8 +195,11 @@ def process_data(folder, bw_folder, test_size=0.1):
     Returns:
         A dictionary of tensors containing image file names.
     """
-    img_list = sorted(os.listdir(folder))
-    bw_img_list = sorted(os.listdir(bw_folder))
+    def file_sort(file_name):
+        return int(file_name.split('.')[0])
+
+    img_list = sorted(os.listdir(folder), key=file_sort)
+    bw_img_list = sorted(os.listdir(bw_folder), key=file_sort)
     img_list = [os.path.join(folder, img) for img in img_list]
     bw_img_list = [os.path.join(bw_folder, img) for img in bw_img_list]
 
