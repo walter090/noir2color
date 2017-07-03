@@ -246,7 +246,7 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
             input_queue_: Tensor of type string that contains image file names.
 
         Returns:
-            Two tensors, black and white and colored images read from the files.
+            Two tensors, black-and-white and colored images read from the files.
         """
         bw_img_file = tf.read_file(input_queue_[0])
         colored_img_file = tf.read_file(input_queue_[1])
@@ -269,3 +269,22 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
                                              batch_size=batch_size)
 
     return bw_batch, colored_batch
+
+
+def discriminator(input_x, base_x, reuse_variables=False):
+    """Builds the discriminator part of the GAN.
+
+    The discriminator takes two inputs, input_x, and base_x; input_x is the image
+    for the network to judge whether it is fake or real (generated or original), while
+    base_x is the condition, in this case base_x is the black-and-white image.
+
+    Args:
+        input_x: Candidate image to be judged by the discriminator.
+        base_x: BW image the judgement is based on.
+        reuse_variables: Set to True to reuse variables.
+
+    Returns:
+        An unscaled value of the discriminator result.
+    """
+    with tf.variable_scope('discriminator', reuse=reuse_variables):
+        raise NotImplementedError
