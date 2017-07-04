@@ -11,10 +11,9 @@ def conv_avg_pool(x,
                   conv_ksize,
                   num_output,
                   conv_stride,
-                  pool_ksize,
-                  pool_stride,
+                  pool_ksize=None,
+                  pool_stride=None,
                   alpha=5,
-                  pooling=True,
                   name='conv'):
     """Convolution-LReLU-average pooling layers.
 
@@ -26,8 +25,6 @@ def conv_avg_pool(x,
         pool_ksize: Filter size for the average pooling layer.
         pool_stride: Stride for the average pooling layer.
         alpha: Parameter for Leaky ReLU
-        pooling: If set to False, a pooling layer will not be added after the conv
-            layer and pooling parameters will be ignored
         name: Name of the variable scope.
 
     Returns:
@@ -47,7 +44,9 @@ def conv_avg_pool(x,
         convoluted = convoluted + bias
         conv = lrelu(convoluted, alpha)
 
-        if pooling:
+        if pool_ksize is not None and pool_stride is not None:
+            pool_ksize = (1,) + pool_ksize + (1,)
+            pool_stride = (1,) + pool_stride + (1,)
             conv = tf.nn.avg_pool(conv, ksize=pool_ksize, strides=pool_stride, padding='VALID')
         return conv
 
@@ -82,24 +81,24 @@ def flatten(x):
     return tf.reshape(x, shape=[-1, np.prod(x[1:])])
 
 
-def fully_conn(x, output_size, name='fc', activation=True):
+def fully_conn(x, num_output, name='fc', activation=True):
     """Fully connected layer, this is is last parts of convnet.
     Fully connect layer requires each image in the batch be flattened.
 
     Args:
         x(Tensor): Input from the previous layer.
-        output_size(int): Output size of the fully connected layer.
+        num_output(int): Output size of the fully connected layer.
         name(str): Name for the fully connected layer variable scope.
         activation(bool): Set to True to add a leaky relu after fully connected
-            layer.
+            layer. Set this argument to False if this is the final layer.
 
     Returns:
         Output tensor.
     """
     with tf.variable_scope(name):
-        weights = tf.get_variable(name='fc_w', shape=[x.get_shape()[-1], output_size],
+        weights = tf.get_variable(name='fc_w', shape=[x.get_shape()[-1], num_output],
                                   initializer=tf.truncated_normal_initializer(stddev=0.02))
-        biases = tf.get_variable(name='fc_b', shape=[output_size],
+        biases = tf.get_variable(name='fc_b', shape=[num_output],
                                  initializer=tf.zeros_initializer())
 
         output = tf.nn.bias_add(tf.matmul(x, weights), biases)
@@ -116,6 +115,7 @@ def deconv(x, ksize, num_output, stride, output_shape=None, padding='SAME', name
     Args:
         x(Tensor): Input tensor from the previous layer.
         ksize: Filter size.
+        num_output: Filter number.
         stride: Stride size.
         output_shape: 1-D array, output size of the deconv layer. Default None,
             if this argument is left as None, an output shape will be calculated.
@@ -297,4 +297,26 @@ def discriminator(input_x, base_x, reuse_variables=False):
     """
     with tf.variable_scope('discriminator', reuse=reuse_variables):
         joint_x = tf.concat([input_x, base_x], axis=3)
-        conv1 = conv_avg_pool(joint_x, )
+        conv_1 = conv_avg_pool(joint_x,
+                               conv_ksize=(16, 16),
+                               num_output=32,
+                               conv_stride=(4, 4),
+                               pool_ksize=(8, 8),
+                               pool_stride=(2, 2))
+        conv_2 = conv_avg_pool(conv_1,
+                               conv_ksize=(8, 8),
+                               num_output=64,
+                               conv_stride=(2, 2),
+                               pool_ksize=(4, 4),
+                               pool_stride=(1, 1))
+        conv_3 = conv_avg_pool(conv_2,
+                               conv_ksize=(5, 5),
+                               num_output=64,
+                               conv_stride=(1, 1),
+                               pool_ksize=(2, 2),
+                               pool_stride=(1, 1))
+        flat = flatten(conv_3)
+        fc_1 = fully_conn(flat, num_output=1024)
+        output = fully_conn(fc_1, num_output=1, activation=False)
+
+        return output
