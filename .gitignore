@@ -1,7 +1,6 @@
 .idea/
 .ipynb_checkpoints/
 test/
-images/
 img_np/
 img_bw/
 images_raw/
