@@ -9,6 +9,7 @@ from random import shuffle
 
 def conv_avg_pool(x,
                   conv_ksize,
+                  num_output,
                   conv_stride,
                   pool_ksize,
                   pool_stride,
@@ -19,24 +20,28 @@ def conv_avg_pool(x,
 
     Args:
         x(Tensor): Input from the previous layer.
-        conv_ksize(list): Filter size for the convolution layer. ksize should be in the
-            shape of [filter_height, filter_width, in_channels, out_channels]
-        conv_stride(list): Stride for the convolution layer.
-        pool_ksize(list): Filter size for the average pooling layer.
-        pool_stride(list): Stride for the average pooling layer.
-        alpha(float): Parameter for Leaky ReLU
-        pooling(bool): If set to False, a pooling layer will not be added after the conv
+        conv_ksize: 2-D tuple, filter size.
+        num_output: Out channels for the convnet.
+        conv_stride: Stride for the convolution layer.
+        pool_ksize: Filter size for the average pooling layer.
+        pool_stride: Stride for the average pooling layer.
+        alpha: Parameter for Leaky ReLU
+        pooling: If set to False, a pooling layer will not be added after the conv
             layer and pooling parameters will be ignored
-        name(str): Name of the variable scope.
+        name: Name of the variable scope.
 
     Returns:
         Output tensor
     """
     with tf.variable_scope(name):
-        weights = tf.get_variable(name='conv_w', shape=conv_ksize,
+        weights = tf.get_variable(name='conv_w',
+                                  shape=[conv_ksize[0], conv_ksize[1], x.get_shape()[3], num_output],
                                   initializer=tf.truncated_normal_initializer(stddev=0.02))
-        bias = tf.get_variable(name='conv_b', shape=[conv_ksize[-1]],
+        bias = tf.get_variable(name='conv_b',
+                               shape=[num_output],
                                initializer=tf.zeros_initializer())
+
+        conv_stride = (1,) + conv_stride + (1,)
 
         convoluted = tf.nn.conv2d(x, filter=weights, strides=conv_stride, padding='VALID')
         convoluted = convoluted + bias
@@ -287,4 +292,5 @@ def discriminator(input_x, base_x, reuse_variables=False):
         An unscaled value of the discriminator result.
     """
     with tf.variable_scope('discriminator', reuse=reuse_variables):
-        raise NotImplementedError
+        joint_x = tf.concat([input_x, base_x], axis=3)
+        conv1 = conv_avg_pool(joint_x, )
