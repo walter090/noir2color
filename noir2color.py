@@ -110,27 +110,31 @@ def fully_conn(x, output_size, name='fc', activation=True):
         return output
 
 
-def deconv(x, ksize, stride, output_shape=None, padding='SAME', name='deconv'):
+def deconv(x, ksize, num_output, stride, output_shape=None, padding='SAME', name='deconv'):
     """Deconvolution (convolution transpose) layer.
 
     Args:
         x(Tensor): Input tensor from the previous layer.
-        ksize(list): Filter size.
-        stride(list): Stride size.
-        output_shape(list): 1-D array, output size of the deconv layer. Default None,
+        ksize: Filter size.
+        stride: Stride size.
+        output_shape: 1-D array, output size of the deconv layer. Default None,
             if this argument is left as None, an output shape will be calculated.
-        padding(str): Padding method for the deconvolution, choose between 'SAME' and
+        padding: Padding method for the deconvolution, choose between 'SAME' and
             'VALID', default 'SAME' padding.
-        name(str): Name for the variable scope of this layer.
+        name: Name for the variable scope of this layer.
 
     Returns:
         Output tensor.
     """
     with tf.variable_scope(name):
-        weights = tf.get_variable(name='deconv_w', shape=ksize,
+        weights = tf.get_variable(name='deconv_w',
+                                  shape=[ksize[0], ksize[1], num_output, x.get_shape()[3]],
                                   initializer=tf.truncated_normal_initializer(stddev=0.02))
-        biases = tf.get_variable(name='deconv_b', shape=ksize[-1],
+        biases = tf.get_variable(name='deconv_b',
+                                 shape=[num_output],
                                  initializer=tf.zeros_initializer())
+
+        stride = (1,) + stride + (1,)
 
         if output_shape is None:
             # if output_shape is not provided, compute default value
