@@ -1,4 +1,3 @@
 # noir2color
 
 ## Introduction
-
