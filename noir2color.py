@@ -1,10 +1,8 @@
 import os
+from random import shuffle
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import ops
-from random import shuffle
 
 
 def conv_avg_pool(x,
@@ -109,13 +107,13 @@ def fully_conn(x, num_output, name='fc', activation=True):
         return output
 
 
-def deconv(x, ksize, num_output, stride, output_shape=None, padding='SAME', name='deconv'):
+def deconv(x, ksize, out_channels, stride, output_shape=None, padding='SAME', name='deconv'):
     """Deconvolution (convolution transpose) layer.
 
     Args:
         x(Tensor): Input tensor from the previous layer.
         ksize: Filter size.
-        num_output: Filter number.
+        out_channels: Filter number.
         stride: Stride size.
         output_shape: 1-D array, output size of the deconv layer. Default None,
             if this argument is left as None, an output shape will be calculated.
@@ -128,10 +126,10 @@ def deconv(x, ksize, num_output, stride, output_shape=None, padding='SAME', name
     """
     with tf.variable_scope(name):
         weights = tf.get_variable(name='deconv_w',
-                                  shape=[ksize[0], ksize[1], num_output, x.get_shape()[3]],
+                                  shape=[ksize[0], ksize[1], out_channels, x.get_shape()[3]],
                                   initializer=tf.truncated_normal_initializer(stddev=0.02))
         biases = tf.get_variable(name='deconv_b',
-                                 shape=[num_output],
+                                 shape=[out_channels],
                                  initializer=tf.zeros_initializer())
 
         stride = (1,) + stride + (1,)
@@ -146,6 +144,7 @@ def deconv(x, ksize, num_output, stride, output_shape=None, padding='SAME', name
             filter_w = ksize[1]
 
             output_shape = [n for n in x.get_shape()]
+            output_shape[-1] = out_channels
             output_shape[-1] = ksize[-1]  # number of kernels
 
             if padding == 'SAME':
@@ -159,7 +158,8 @@ def deconv(x, ksize, num_output, stride, output_shape=None, padding='SAME', name
                 raise ValueError("Padding must be one of 'SAME' and 'VALID', set to None to use"
                                  "default padding")
 
-        deconvolved = tf.nn.conv2d_transpose(x, filter=weights, output_shape=output_shape,
+        deconvolved = tf.nn.conv2d_transpose(x,
+                                             filter=weights, output_shape=output_shape,
                                              strides=stride, padding=padding)
         deconv_out = tf.nn.bias_add(deconvolved, biases)
         return deconv_out
@@ -216,8 +216,8 @@ def process_data(folder, bw_folder, test_size=0.1):
     total_test_size = int(test_size * total_samples)
 
     # List of image file names.
-    colored_images = ops.convert_to_tensor(img_list, dtype=dtypes.string)
-    bw_images = ops.convert_to_tensor(bw_img_list, dtype=dtypes.string)
+    colored_images = tf.convert_to_tensor(img_list, dtype=tf.string)
+    bw_images = tf.convert_to_tensor(bw_img_list, dtype=tf.string)
 
     # Partition images into training and testing
     partition = [0] * total_samples
@@ -262,7 +262,9 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
         bw_img_ = tf.image.decode_jpeg(bw_img_file, channels=1)  # Decode as grayscale
         colored_img_ = tf.image.decode_jpeg(colored_img_file, channels=3)  # Decode as RGB
 
-        # decode_jpeg somehow does not return shape of the image, need to manually set
+        # decode_jpeg somehow does not return shape of the image, need to manually set.
+        # Make sure bw_img and colored_img are on the same rank as they may be concatenated
+        # in the future.
         bw_img_.set_shape([height, width, 1])
         colored_img_.set_shape([height, width, 3])
 
@@ -280,22 +282,23 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
     return bw_batch, colored_batch
 
 
-def discriminator(input_x, base_x, reuse_variables=False):
+def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
     """Builds the discriminator part of the GAN.
 
     The discriminator takes two inputs, input_x, and base_x; input_x is the image
     for the network to judge whether it is fake or real (generated or original), while
-    base_x is the condition, in this case base_x is the black-and-white image.
+    base_x is the conditional input, in this case base_x is the black-and-white image.
 
     Args:
         input_x: Candidate image to be judged by the discriminator.
         base_x: BW image the judgement is based on.
         reuse_variables: Set to True to reuse variables.
+        name: Variable scope name.
 
     Returns:
         An unscaled value of the discriminator result.
     """
-    with tf.variable_scope('discriminator', reuse=reuse_variables):
+    with tf.variable_scope(name, reuse=reuse_variables):
         joint_x = tf.concat([input_x, base_x], axis=3)
         conv_1 = conv_avg_pool(joint_x,
                                conv_ksize=(16, 16),
@@ -320,3 +323,16 @@ def discriminator(input_x, base_x, reuse_variables=False):
         output = fully_conn(fc_1, num_output=1, activation=False)
 
         return output
+
+
+def generator(input_x, name='generator'):
+    """Generator network
+
+    Args:
+        input_x: Input image
+        name: Variable scope name
+
+    Returns:
+        Generated image
+    """
+    raise NotImplementedError
