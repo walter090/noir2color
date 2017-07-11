@@ -7,7 +7,7 @@ import tensorflow as tf
 
 def conv_avg_pool(x,
                   conv_ksize,
-                  num_output,
+                  out_channels,
                   conv_stride,
                   pool_ksize=None,
                   pool_stride=None,
@@ -15,10 +15,13 @@ def conv_avg_pool(x,
                   name='conv'):
     """Convolution-LReLU-average pooling layers.
 
+    This function takes the input and returns the output of the result after
+    a convolution layer and an optional average pooling layer.
+
     Args:
         x(Tensor): Input from the previous layer.
         conv_ksize: 2-D tuple, filter size.
-        num_output: Out channels for the convnet.
+        out_channels: Out channels for the convnet.
         conv_stride: Stride for the convolution layer.
         pool_ksize: Filter size for the average pooling layer.
         pool_stride: Stride for the average pooling layer.
@@ -30,10 +33,10 @@ def conv_avg_pool(x,
     """
     with tf.variable_scope(name):
         weights = tf.get_variable(name='conv_w',
-                                  shape=[conv_ksize[0], conv_ksize[1], x.get_shape()[3], num_output],
+                                  shape=[conv_ksize[0], conv_ksize[1], x.get_shape()[3], out_channels],
                                   initializer=tf.truncated_normal_initializer(stddev=0.02))
         bias = tf.get_variable(name='conv_b',
-                               shape=[num_output],
+                               shape=[out_channels],
                                initializer=tf.zeros_initializer())
 
         conv_stride = (1,) + conv_stride + (1,)
@@ -107,7 +110,7 @@ def fully_conn(x, num_output, name='fc', activation=True):
         return output
 
 
-def deconv(x, ksize, out_channels, stride, output_shape=None, padding='SAME', name='deconv'):
+def deconv(x, ksize, out_channels, stride, output_shape=None, padding='VALID', name='deconv'):
     """Deconvolution (convolution transpose) layer.
 
     Args:
@@ -148,11 +151,11 @@ def deconv(x, ksize, out_channels, stride, output_shape=None, padding='SAME', na
             output_shape[-1] = ksize[-1]  # number of kernels
 
             if padding == 'SAME':
-                output_shape[1] = (input_h + stride_h - 1) // stride_h
-                output_shape[2] = (input_w + stride_w - 1) // stride_w
+                output_shape[1] = input_h * stride_h
+                output_shape[2] = input_w * stride_w
             elif padding == 'VALID':
-                output_shape[1] = (input_h + stride_h - filter_h) // stride_h
-                output_shape[2] = (input_w + stride_w - filter_w) // stride_w
+                output_shape[1] = (input_h - 1) * stride_h + filter_h
+                output_shape[2] = (input_w - 1) * stride_w + filter_w
             else:
                 # if padding is not one of 'SAME' and 'VALID', raise an error
                 raise ValueError("Padding must be one of 'SAME' and 'VALID', set to None to use"
@@ -204,6 +207,7 @@ def process_data(folder, bw_folder, test_size=0.1):
     Returns:
         A dictionary of tensors containing image file names.
     """
+
     def file_sort(file_name):
         return int(file_name.split('.')[0])
 
@@ -224,9 +228,9 @@ def process_data(folder, bw_folder, test_size=0.1):
     partition[: total_test_size] = [1] * total_test_size
     shuffle(partition)
 
-    train_colored_images, test_colored_images =\
+    train_colored_images, test_colored_images = \
         tf.dynamic_partition(colored_images, partition, num_partitions=2)
-    train_bw_images, test_bw_images =\
+    train_bw_images, test_bw_images = \
         tf.dynamic_partition(bw_images, partition, num_partitions=2)
 
     return {'train': (train_bw_images, train_colored_images),
@@ -248,6 +252,7 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
     Returns:
         A tuple of black and white image batch and colored image patch.
     """
+
     def read_image(input_queue_):
         """Read images from specified files.
 
@@ -302,20 +307,20 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
         joint_x = tf.concat([input_x, base_x], axis=3)
         conv_1 = conv_avg_pool(joint_x,
                                conv_ksize=(16, 16),
-                               num_output=32,
+                               out_channels=32,
                                conv_stride=(4, 4),
                                pool_ksize=(8, 8),
                                pool_stride=(2, 2))
         conv_2 = conv_avg_pool(conv_1,
                                conv_ksize=(8, 8),
-                               num_output=64,
+                               out_channels=64,
                                conv_stride=(2, 2),
                                pool_ksize=(4, 4),
-                               pool_stride=(1, 1))
+                               pool_stride=(2, 2))
         conv_3 = conv_avg_pool(conv_2,
-                               conv_ksize=(5, 5),
-                               num_output=64,
-                               conv_stride=(1, 1),
+                               conv_ksize=(4, 4),
+                               out_channels=64,
+                               conv_stride=(2, 2),
                                pool_ksize=(2, 2),
                                pool_stride=(1, 1))
         flat = flatten(conv_3)
@@ -325,14 +330,36 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
         return output
 
 
-def generator(input_x, name='generator'):
+def generator(input_x, name='generator', conv_layers=None, deconv_layers=None):
     """Generator network
 
     Args:
         input_x: Input image
         name: Variable scope name
+        conv_layers: A list of lists specifying parameters for each conv layer.
+        deconv_layers: A list of lists specifying parameters for each deconv layer.
 
     Returns:
         Generated image
     """
-    raise NotImplementedError
+    with tf.variable_scope(name):
+        if conv_layers is None:
+            conv_layers = [
+                # filter size, stride, output channels
+                [(8, 8), (2, 2), 16],
+                [(4, 4), (2, 2), 32],
+                [(4, 4), (2, 2), 64],
+                [(4, 4), (2, 2), 128],
+                [(4, 4), (2, 2), 256],
+            ]
+
+        convolved = input_x
+        for layer in conv_layers:
+            convolved = conv_avg_pool(convolved, conv_ksize=layer[0],
+                                      conv_stride=layer[1], out_channels=layer[2])
+            convolved = batch_normalize(convolved)
+
+        if deconv_layers is None:
+            deconv_layers = [
+
+            ]
