@@ -12,7 +12,8 @@ def conv_avg_pool(x,
                   pool_ksize=None,
                   pool_stride=None,
                   alpha=5,
-                  name='conv'):
+                  name='conv',
+                  padding='SAME'):
     """Convolution-LReLU-average pooling layers.
 
     This function takes the input and returns the output of the result after
@@ -27,6 +28,7 @@ def conv_avg_pool(x,
         pool_stride: Stride for the average pooling layer.
         alpha: Parameter for Leaky ReLU
         name: Name of the variable scope.
+        padding: Padding for the layers, default 'SAME'.
 
     Returns:
         Output tensor
@@ -41,14 +43,14 @@ def conv_avg_pool(x,
 
         conv_stride = (1,) + conv_stride + (1,)
 
-        convoluted = tf.nn.conv2d(x, filter=weights, strides=conv_stride, padding='VALID')
+        convoluted = tf.nn.conv2d(x, filter=weights, strides=conv_stride, padding=padding)
         convoluted = convoluted + bias
         conv = lrelu(convoluted, alpha)
 
         if pool_ksize is not None and pool_stride is not None:
             pool_ksize = (1,) + pool_ksize + (1,)
             pool_stride = (1,) + pool_stride + (1,)
-            conv = tf.nn.avg_pool(conv, ksize=pool_ksize, strides=pool_stride, padding='VALID')
+            conv = tf.nn.avg_pool(conv, ksize=pool_ksize, strides=pool_stride, padding=padding)
         return conv
 
 
@@ -110,7 +112,7 @@ def fully_conn(x, num_output, name='fc', activation=True):
         return output
 
 
-def deconv(x, ksize, out_channels, stride, output_shape=None, padding='VALID', name='deconv'):
+def deconv(x, ksize, out_channels, stride, output_shape=None, padding='SAME', name='deconv'):
     """Deconvolution (convolution transpose) layer.
 
     Args:
@@ -306,13 +308,13 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
     with tf.variable_scope(name, reuse=reuse_variables):
         joint_x = tf.concat([input_x, base_x], axis=3)
         conv_1 = conv_avg_pool(joint_x,
-                               conv_ksize=(16, 16),
+                               conv_ksize=(4, 4),
                                out_channels=32,
-                               conv_stride=(4, 4),
+                               conv_stride=(1, 1),
                                pool_ksize=(8, 8),
                                pool_stride=(2, 2))
         conv_2 = conv_avg_pool(conv_1,
-                               conv_ksize=(8, 8),
+                               conv_ksize=(4, 4),
                                out_channels=64,
                                conv_stride=(2, 2),
                                pool_ksize=(4, 4),
@@ -346,7 +348,7 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None):
         if conv_layers is None:
             conv_layers = [
                 # filter size, stride, output channels
-                [(8, 8), (2, 2), 16],
+                [(4, 4), (2, 2), 16],
                 [(4, 4), (2, 2), 32],
                 [(4, 4), (2, 2), 64],
                 [(4, 4), (2, 2), 128],
@@ -361,5 +363,5 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None):
 
         if deconv_layers is None:
             deconv_layers = [
-
+                [],
             ]
