@@ -363,5 +363,18 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None):
 
         if deconv_layers is None:
             deconv_layers = [
-                [],
+                [(4, 4), (2, 2), 256],
+                [(4, 4), (2, 2), 128],
+                [(4, 4), (2, 2), 64],
+                [(4, 4), (2, 2), 32],
+                [(4, 4), (2, 2), 3]
             ]
+
+        deconvolved = convolved
+        for layer in deconv_layers:
+            deconvolved = deconv(deconvolved, ksize=layer[0],
+                                 stride=layer[1], out_channels=layer[2])
+            deconvolved = batch_normalize(deconvolved)
+
+        generated = tf.nn.tanh(deconvolved)
+        return generated
