@@ -20,7 +20,7 @@ def conv_avg_pool(x,
     a convolution layer and an optional average pooling layer.
 
     Args:
-        x(Tensor): Input from the previous layer.
+        x: Input from the previous layer.
         conv_ksize: 2-D tuple, filter size.
         out_channels: Out channels for the convnet.
         conv_stride: Stride for the convolution layer.
@@ -35,16 +35,17 @@ def conv_avg_pool(x,
     """
     with tf.variable_scope(name):
         weights = tf.get_variable(name='conv_w',
-                                  shape=[conv_ksize[0], conv_ksize[1], x.get_shape()[3], out_channels],
+                                  shape=[conv_ksize[0], conv_ksize[1],
+                                         x.get_shape().as_list()[3], out_channels],
                                   initializer=tf.truncated_normal_initializer(stddev=0.02))
         bias = tf.get_variable(name='conv_b',
                                shape=[out_channels],
                                initializer=tf.zeros_initializer())
 
-        conv_stride = (1,) + conv_stride + (1,)
+        conv_stride = [1, *conv_stride, 1]
 
         convoluted = tf.nn.conv2d(x, filter=weights, strides=conv_stride, padding=padding)
-        convoluted = convoluted + bias
+        convoluted = tf.nn.bias_add(convoluted, bias)
         conv = lrelu(convoluted, alpha)
 
         if pool_ksize is not None and pool_stride is not None:
@@ -99,7 +100,7 @@ def fully_conn(x, num_output, name='fc', activation=True):
         Output tensor.
     """
     with tf.variable_scope(name):
-        weights = tf.get_variable(name='fc_w', shape=[x.get_shape()[-1], num_output],
+        weights = tf.get_variable(name='fc_w', shape=[x.get_shape().as_list[-1], num_output],
                                   initializer=tf.truncated_normal_initializer(stddev=0.02))
         biases = tf.get_variable(name='fc_b', shape=[num_output],
                                  initializer=tf.zeros_initializer())
@@ -137,20 +138,21 @@ def deconv(x, ksize, out_channels, stride, output_shape=None, padding='SAME', na
                                  shape=[out_channels],
                                  initializer=tf.zeros_initializer())
 
-        stride = (1,) + stride + (1,)
+        stride = [1, *stride, 1]
+
+        x_shape = x.get_shape().as_list()
 
         if output_shape is None:
             # if output_shape is not provided, compute default value
             stride_h = stride[1]
             stride_w = stride[2]
-            input_h = x.get_shape()[1]
-            input_w = x.get_shape()[2]
+            input_h = x_shape[1]
+            input_w = x_shape[2]
             filter_h = ksize[0]
             filter_w = ksize[1]
 
-            output_shape = [n for n in x.get_shape()]
+            output_shape = [n for n in x_shape]
             output_shape[-1] = out_channels
-            output_shape[-1] = ksize[-1]  # number of kernels
 
             if padding == 'SAME':
                 output_shape[1] = input_h * stride_h
@@ -184,9 +186,9 @@ def batch_normalize(x, epsilon=1e-5):
     with tf.variable_scope('batch_norm'):
         mean, variance = tf.nn.moments(x, axes=[0])
 
-        scale = tf.get_variable('bn_scale', shape=[x.get_shape()[-1]],
+        scale = tf.get_variable('bn_scale', shape=[x.get_shape().as_list()[-1]],
                                 initializer=tf.random_normal_initializer())
-        offset = tf.get_variable('bn_bias', shape=[x.get_shape()[-1]],
+        offset = tf.get_variable('bn_bias', shape=[x.get_shape().as_list()[-1]],
                                  initializer=tf.zeros_initializer())
         normalized = tf.nn.batch_normalization(x=x,
                                                mean=mean,
@@ -356,10 +358,11 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None):
             ]
 
         convolved = input_x
-        for layer in conv_layers:
-            convolved = conv_avg_pool(convolved, conv_ksize=layer[0],
-                                      conv_stride=layer[1], out_channels=layer[2])
-            convolved = batch_normalize(convolved)
+        for i_layer, layer in enumerate(conv_layers):
+            with tf.variable_scope('conv_{}'.format(i_layer)):
+                convolved = conv_avg_pool(convolved, conv_ksize=layer[0],
+                                          conv_stride=layer[1], out_channels=layer[2])
+                convolved = batch_normalize(convolved)
 
         if deconv_layers is None:
             deconv_layers = [
@@ -367,14 +370,15 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None):
                 [(4, 4), (2, 2), 128],
                 [(4, 4), (2, 2), 64],
                 [(4, 4), (2, 2), 32],
-                [(4, 4), (2, 2), 3]
+                [(4, 4), (2, 2), 3],
             ]
 
         deconvolved = convolved
-        for layer in deconv_layers:
-            deconvolved = deconv(deconvolved, ksize=layer[0],
-                                 stride=layer[1], out_channels=layer[2])
-            deconvolved = batch_normalize(deconvolved)
+        for i_layer, layer in enumerate(deconv_layers):
+            with tf.variable_scope('deconv_{}'.format(i_layer)):
+                deconvolved = deconv(deconvolved, ksize=layer[0],
+                                     stride=layer[1], out_channels=layer[2])
+                deconvolved = batch_normalize(deconvolved)
 
         generated = tf.nn.tanh(deconvolved)
         return generated
