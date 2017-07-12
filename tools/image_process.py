@@ -99,17 +99,30 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256)):
         img_id += 1
 
 
-def rescale(img):
+def standardize(img):
     """Pre-processing the RGB image
     Simple rescaling to the range [0, 1]
 
     Args:
-        img(list): Natural image in numpy array
+        img: Natural image in numpy array
 
     Returns:
         Scaled image
     """
     return img / 255
+
+
+def destandardize(img):
+    """Convert a standardized image back to traditional
+    RGB, i.e. rescale values in the range [0, 1] to [0, 255]
+
+    Args:
+        img: Numpy array that is a standardized image
+
+    Returns:
+        RGB image
+    """
+    return int(img * 255)
 
 
 def color2bw(img):
