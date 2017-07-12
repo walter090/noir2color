@@ -13,7 +13,8 @@ def conv_avg_pool(x,
                   pool_stride=None,
                   alpha=5,
                   name='conv',
-                  padding='SAME'):
+                  padding='SAME',
+                  batchnorm=False):
     """Convolution-LReLU-average pooling layers.
 
     This function takes the input and returns the output of the result after
@@ -29,6 +30,7 @@ def conv_avg_pool(x,
         alpha: Parameter for Leaky ReLU
         name: Name of the variable scope.
         padding: Padding for the layers, default 'SAME'.
+        batchnorm: Set True to use batch normalization.
 
     Returns:
         Output tensor
@@ -46,6 +48,10 @@ def conv_avg_pool(x,
 
         convoluted = tf.nn.conv2d(x, filter=weights, strides=conv_stride, padding=padding)
         convoluted = tf.nn.bias_add(convoluted, bias)
+
+        if batchnorm:
+            convoluted = batch_normalize(convoluted)
+
         conv = lrelu(convoluted, alpha)
 
         if pool_ksize is not None and pool_stride is not None:
@@ -113,7 +119,14 @@ def fully_conn(x, num_output, name='fc', activation=True):
         return output
 
 
-def deconv(x, ksize, out_channels, stride, output_shape=None, padding='SAME', name='deconv'):
+def deconv(x,
+           ksize,
+           out_channels,
+           stride,
+           output_shape=None,
+           padding='SAME',
+           name='deconv',
+           batchnorm=False):
     """Deconvolution (convolution transpose) layer.
 
     Args:
@@ -126,6 +139,7 @@ def deconv(x, ksize, out_channels, stride, output_shape=None, padding='SAME', na
         padding: Padding method for the deconvolution, choose between 'SAME' and
             'VALID', default 'SAME' padding.
         name: Name for the variable scope of this layer.
+        batchnorm: Set True to use batch normalization.
 
     Returns:
         Output tensor.
@@ -169,6 +183,12 @@ def deconv(x, ksize, out_channels, stride, output_shape=None, padding='SAME', na
                                              filter=weights, output_shape=output_shape,
                                              strides=stride, padding=padding)
         deconv_out = tf.nn.bias_add(deconvolved, biases)
+
+        if batchnorm:
+            deconv_out = batch_normalize(deconv_out)
+
+        deconv_out = lrelu(deconv_out)
+
         return deconv_out
 
 
@@ -360,9 +380,11 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None):
         convolved = input_x
         for i_layer, layer in enumerate(conv_layers):
             with tf.variable_scope('conv_{}'.format(i_layer)):
-                convolved = conv_avg_pool(convolved, conv_ksize=layer[0],
-                                          conv_stride=layer[1], out_channels=layer[2])
-                convolved = batch_normalize(convolved)
+                convolved = conv_avg_pool(convolved,
+                                          conv_ksize=layer[0],
+                                          conv_stride=layer[1],
+                                          out_channels=layer[2],
+                                          batchnorm=True)
 
         if deconv_layers is None:
             deconv_layers = [
@@ -376,9 +398,11 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None):
         deconvolved = convolved
         for i_layer, layer in enumerate(deconv_layers):
             with tf.variable_scope('deconv_{}'.format(i_layer)):
-                deconvolved = deconv(deconvolved, ksize=layer[0],
-                                     stride=layer[1], out_channels=layer[2])
-                deconvolved = batch_normalize(deconvolved)
+                deconvolved = deconv(deconvolved,
+                                     ksize=layer[0],
+                                     stride=layer[1],
+                                     out_channels=layer[2],
+                                     batchnorm=True)
 
         generated = tf.nn.tanh(deconvolved)
         return generated
