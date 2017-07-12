@@ -104,12 +104,13 @@ def standardize(img):
     Simple rescaling to the range [0, 1]
 
     Args:
-        img: Natural image in numpy array
+        img(numpy.ndarray): Natural image in numpy array
 
     Returns:
         Scaled image
     """
-    return img / 255
+    img = img / 255
+    return img.astype(np.float32)
 
 
 def destandardize(img):
@@ -117,12 +118,14 @@ def destandardize(img):
     RGB, i.e. rescale values in the range [0, 1] to [0, 255]
 
     Args:
-        img: Numpy array that is a standardized image
+        img(numpy.ndarray): Numpy array that is a standardized image
 
     Returns:
         RGB image
     """
-    return int(img * 255)
+    img = img * 255
+    img = img.astype(np.uint8)
+    return img
 
 
 def color2bw(img):
