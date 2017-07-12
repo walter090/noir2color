@@ -3,7 +3,7 @@ from random import shuffle
 
 import numpy as np
 import tensorflow as tf
-
+from tools.image_process import scale
 
 def conv_avg_pool(x,
                   conv_ksize,
@@ -265,10 +265,9 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
     """Pipeline for inputting images.
 
     Args:
-        images_tuple: Python dictionary containing string typed tensors that
-            are image file names. The dictionary comes in the shape of
-            {'train': (train_bw_images, train_colored_images),
-            'test': (test_bw_images, test_colored_images)}
+        images_tuple: Python tuple containing string typed tensors that
+            are image file names. The tuple comes in the shape of
+            (bw_images, colored_images)
         height: Height of the image.
         width: Width of the image.
         batch_size: Size of each batch, default 50.
@@ -291,13 +290,21 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
         bw_img_ = tf.image.decode_jpeg(bw_img_file, channels=1)  # Decode as grayscale
         colored_img_ = tf.image.decode_jpeg(colored_img_file, channels=3)  # Decode as RGB
 
-        # decode_jpeg somehow does not return shape of the image, need to manually set.
+        # decode_jpeg somehow does not set shape of the image, need to manually set.
         # Make sure bw_img and colored_img are on the same rank as they may be concatenated
         # in the future.
         bw_img_.set_shape([height, width, 1])
         colored_img_.set_shape([height, width, 3])
 
-        return bw_img_, colored_img_
+        bw_array = bw_img_.eval()
+        colored_array = colored_img_.eval()
+
+        bw_array = scale(bw_array, feature_range=(0, 1))
+        colored_array = scale(colored_array, feature_range=(0, 255))
+        bw = tf.convert_to_tensor(bw_array, dtype=tf.float32)
+        colored = tf.convert_to_tensor(colored_array, dtype=tf.float32)
+
+        return bw, colored
 
     bw_images, colored_images = images_tuple
 
