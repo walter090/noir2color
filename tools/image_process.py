@@ -1,10 +1,11 @@
 import os
 
 import numpy as np
+import scipy.misc
 from PIL import Image
 from skimage.color import rgb2gray
 from skimage.transform import resize
-import scipy.misc
+from sklearn.preprocessing import MinMaxScaler
 
 
 def load_image(image_file, output_size=(256, 256)):
@@ -99,33 +100,23 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256)):
         img_id += 1
 
 
-def standardize(img):
+def scale(img, feature_range=(0, 255), target_range=(-1, 1)):
     """Pre-processing the RGB image
-    Simple rescaling to the range [0, 1]
+    Simple rescaling to the range [-1, 1]
 
     Args:
-        img(numpy.ndarray): Natural image in numpy array
+        img(numpy.ndarray): Natural image in numpy array.
+        feature_range: Min max range of the numpy array.
+        target_range: Min max range of the desired output.
 
     Returns:
         Scaled image
     """
-    img = img / 255
+    scaler = MinMaxScaler(feature_range=feature_range)
+    scaler.fit([[target_range[0]], [target_range[1]]])
+    img = scaler.transform(img)
+
     return img.astype(np.float32)
-
-
-def destandardize(img):
-    """Convert a standardized image back to traditional
-    RGB, i.e. rescale values in the range [0, 1] to [0, 255]
-
-    Args:
-        img(numpy.ndarray): Numpy array that is a standardized image
-
-    Returns:
-        RGB image
-    """
-    img = img * 255
-    img = img.astype(np.uint8)
-    return img
 
 
 def color2bw(img):
