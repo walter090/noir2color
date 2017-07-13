@@ -227,7 +227,7 @@ def process_data(folder, bw_folder, test_size=0.1):
     Args:
         folder: Directory to the unprocessed images.
         bw_folder: Directory to the black and white images.
-        test_size: Test set size, float between 0 and 1, default 0.1
+        test_size: Test set size, float between 0 and 1, defaults 0.1
 
     Returns:
         A dictionary of tensors containing image file names.
