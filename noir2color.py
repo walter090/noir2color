@@ -205,7 +205,7 @@ def batch_normalize(x, epsilon=1e-5):
     """
     # Before activation
     with tf.variable_scope('batch_norm'):
-        mean, variance = tf.nn.moments(x, axes=[0])
+        mean, variance = tf.nn.moments(x, axes=[0, 1, 2])
 
         scale = tf.get_variable('bn_scale', shape=[x.get_shape().as_list()[-1]],
                                 initializer=tf.random_normal_initializer())
@@ -362,14 +362,17 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
         return output
 
 
-def generator(input_x, name='generator', conv_layers=None, deconv_layers=None):
+def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, batchnorm=True):
     """Generator network
 
     Args:
         input_x: Input image
         name: Variable scope name
         conv_layers: A list of lists specifying parameters for each conv layer.
+            Defaults None.
         deconv_layers: A list of lists specifying parameters for each deconv layer.
+            Defaults None.
+        batchnorm: Set True to use batch normalization. Defaults True.
 
     Returns:
         Generated image
@@ -395,7 +398,7 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None):
                                           conv_ksize=layer[0],
                                           conv_stride=layer[1],
                                           out_channels=layer[2],
-                                          batchnorm=True)
+                                          batchnorm=batchnorm)
 
         if deconv_layers is None:
             deconv_layers = [
@@ -413,7 +416,7 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None):
                                      ksize=layer[0],
                                      stride=layer[1],
                                      out_channels=layer[2],
-                                     batchnorm=True)
+                                     batchnorm=batchnorm)
 
         generated = tf.nn.tanh(deconvolved)
         return generated
