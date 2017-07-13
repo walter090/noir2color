@@ -8,11 +8,11 @@ from tools.image_process import scale
 
 def conv_avg_pool(x,
                   conv_ksize,
-                  out_channels,
                   conv_stride,
+                  out_channels,
                   pool_ksize=None,
                   pool_stride=None,
-                  alpha=5,
+                  alpha=0.1,
                   name='conv',
                   padding='SAME',
                   batchnorm=False):
@@ -24,8 +24,8 @@ def conv_avg_pool(x,
     Args:
         x: Input from the previous layer.
         conv_ksize: 2-D tuple, filter size.
-        out_channels: Out channels for the convnet.
         conv_stride: Stride for the convolution layer.
+        out_channels: Out channels for the convnet.
         pool_ksize: Filter size for the average pooling layer.
         pool_stride: Stride for the average pooling layer.
         alpha: Parameter for Leaky ReLU
@@ -89,7 +89,7 @@ def flatten(x):
     Returns:
         Flattened tensor.
     """
-    return tf.reshape(x, shape=[-1, np.prod(x[1:])])
+    return tf.reshape(x, shape=[-1, np.prod(x.get_shape().as_list()[1:])])
 
 
 def fully_conn(x, num_output, name='fc', activation=True):
@@ -107,7 +107,7 @@ def fully_conn(x, num_output, name='fc', activation=True):
         Output tensor.
     """
     with tf.variable_scope(name):
-        weights = tf.get_variable(name='fc_w', shape=[x.get_shape().as_list[-1], num_output],
+        weights = tf.get_variable(name='fc_w', shape=[x.get_shape().as_list()[-1], num_output],
                                   initializer=tf.random_normal_initializer(stddev=0.02))
         biases = tf.get_variable(name='fc_b', shape=[num_output],
                                  initializer=tf.zeros_initializer())
@@ -337,27 +337,31 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
     """
     with tf.variable_scope(name, reuse=reuse_variables):
         joint_x = tf.concat([input_x, base_x], axis=3)
-        conv_1 = conv_avg_pool(joint_x,
-                               conv_ksize=(4, 4),
-                               out_channels=32,
-                               conv_stride=(1, 1),
-                               pool_ksize=(8, 8),
-                               pool_stride=(2, 2))
-        conv_2 = conv_avg_pool(conv_1,
-                               conv_ksize=(4, 4),
-                               out_channels=64,
-                               conv_stride=(2, 2),
-                               pool_ksize=(4, 4),
-                               pool_stride=(2, 2))
-        conv_3 = conv_avg_pool(conv_2,
-                               conv_ksize=(4, 4),
-                               out_channels=64,
-                               conv_stride=(2, 2),
-                               pool_ksize=(2, 2),
-                               pool_stride=(1, 1))
-        flat = flatten(conv_3)
-        fc_1 = fully_conn(flat, num_output=1024)
-        output = fully_conn(fc_1, num_output=1, activation=False)
+
+        conv_layers = [
+            # Specify each convolution layer parameters
+            # conv_ksize, conv_stride, out_channels, pool_ksize, pool_stride
+            [(4, 4), (2, 2), 16, (4, 4), (2, 2)],
+            [(4, 4), (2, 2), 32, (4, 4), (2, 2)],
+            [(4, 4), (2, 2), 64, (2, 2), (1, 1)],
+            [(4, 4), (2, 2), 128, (2, 2), (1, 1)],
+        ]
+
+        conv_out = joint_x
+        for layer_i, layer in enumerate(conv_layers):
+            conv_out = conv_avg_pool(conv_out, *layer, name='disc_conv_{}'.format(layer_i))
+
+        flat = flatten(conv_out)
+        fc_layers = [
+            # num_output, activation
+            [1024, True],
+            [1, False],
+        ]
+
+        output = flat
+        for layer_i, layer in enumerate(fc_layers):
+            output = fully_conn(output, num_output=layer[0],
+                                activation=layer[1], name='disc_fc_{}'.format(layer_i))
 
         return output
 
@@ -392,13 +396,13 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, b
             ]
 
         convolved = input_x
-        for i_layer, layer in enumerate(conv_layers):
-            with tf.variable_scope('conv_{}'.format(i_layer)):
-                convolved = conv_avg_pool(convolved,
-                                          conv_ksize=layer[0],
-                                          conv_stride=layer[1],
-                                          out_channels=layer[2],
-                                          batchnorm=batchnorm)
+        for layer_i, layer in enumerate(conv_layers):
+            convolved = conv_avg_pool(convolved,
+                                      conv_ksize=layer[0],
+                                      conv_stride=layer[1],
+                                      out_channels=layer[2],
+                                      batchnorm=batchnorm,
+                                      name='gen_conv_{}'.format(layer_i))
 
         if deconv_layers is None:
             deconv_layers = [
@@ -410,13 +414,13 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, b
             ]
 
         deconvolved = convolved
-        for i_layer, layer in enumerate(deconv_layers):
-            with tf.variable_scope('deconv_{}'.format(i_layer)):
-                deconvolved = deconv(deconvolved,
-                                     ksize=layer[0],
-                                     stride=layer[1],
-                                     out_channels=layer[2],
-                                     batchnorm=batchnorm)
+        for layer_i, layer in enumerate(deconv_layers):
+            deconvolved = deconv(deconvolved,
+                                 ksize=layer[0],
+                                 stride=layer[1],
+                                 out_channels=layer[2],
+                                 batchnorm=batchnorm,
+                                 name='gen_deconv_{}'.format(layer_i))
 
         generated = tf.nn.tanh(deconvolved)
         return generated
