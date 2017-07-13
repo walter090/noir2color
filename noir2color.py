@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 from tools.image_process import scale
 
+
 def conv_avg_pool(x,
                   conv_ksize,
                   out_channels,
@@ -39,7 +40,7 @@ def conv_avg_pool(x,
         weights = tf.get_variable(name='conv_w',
                                   shape=[conv_ksize[0], conv_ksize[1],
                                          x.get_shape().as_list()[3], out_channels],
-                                  initializer=tf.truncated_normal_initializer(stddev=0.02))
+                                  initializer=tf.random_normal_initializer(stddev=0.02))
         bias = tf.get_variable(name='conv_b',
                                shape=[out_channels],
                                initializer=tf.zeros_initializer())
@@ -61,7 +62,7 @@ def conv_avg_pool(x,
         return conv
 
 
-def lrelu(x, alpha=5):
+def lrelu(x, alpha=0.1):
     """Leaky ReLU activation.
 
     Args:
@@ -72,7 +73,7 @@ def lrelu(x, alpha=5):
         Output tensor
     """
     linear = 0.5 * x + 0.5 * tf.abs(x)
-    leaky = 0.5 * alpha * x + 0.5 * alpha * tf.abs(x)
+    leaky = 0.5 * alpha * x - 0.5 * alpha * tf.abs(x)
     output = leaky + linear
     return output
 
@@ -107,7 +108,7 @@ def fully_conn(x, num_output, name='fc', activation=True):
     """
     with tf.variable_scope(name):
         weights = tf.get_variable(name='fc_w', shape=[x.get_shape().as_list[-1], num_output],
-                                  initializer=tf.truncated_normal_initializer(stddev=0.02))
+                                  initializer=tf.random_normal_initializer(stddev=0.02))
         biases = tf.get_variable(name='fc_b', shape=[num_output],
                                  initializer=tf.zeros_initializer())
 
@@ -147,7 +148,7 @@ def deconv(x,
     with tf.variable_scope(name):
         weights = tf.get_variable(name='deconv_w',
                                   shape=[ksize[0], ksize[1], out_channels, x.get_shape()[3]],
-                                  initializer=tf.truncated_normal_initializer(stddev=0.02))
+                                  initializer=tf.random_normal_initializer(stddev=0.02))
         biases = tf.get_variable(name='deconv_b',
                                  shape=[out_channels],
                                  initializer=tf.zeros_initializer())
@@ -299,7 +300,7 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
         bw_array = bw_img_.eval()
         colored_array = colored_img_.eval()
 
-        bw_array = scale(bw_array, feature_range=(0, 1))
+        bw_array = scale(bw_array, feature_range=(0, 255))
         colored_array = scale(colored_array, feature_range=(0, 255))
         bw = tf.convert_to_tensor(bw_array, dtype=tf.float32)
         colored = tf.convert_to_tensor(colored_array, dtype=tf.float32)
@@ -374,6 +375,9 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None):
         Generated image
     """
     with tf.variable_scope(name):
+        input_z = tf.random_normal(shape=input_x.get_shape(), stddev=0.02, dtype=tf.float32)
+        input_x = tf.concat([input_x, input_z], axis=3)
+
         if conv_layers is None:
             conv_layers = [
                 # filter size, stride, output channels
