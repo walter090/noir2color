@@ -114,9 +114,14 @@ def scale(img, original_range=(0, 255), target_range=(-1, 1)):
     """
     scaler = MinMaxScaler(feature_range=target_range)
     scaler.fit([[original_range[0]], [original_range[1]]])
-    img = scaler.transform(img)
 
-    return img.astype(np.float32)
+    img_shape = img.shape
+    img = np.reshape(img, (-1, 1))
+    img = scaler.transform(img)
+    scaled_img = np.reshape(img, img_shape)
+
+    return scaled_img.astype(np.uint8) if target_range == (0, 255)\
+        else scaled_img.astype(np.float32)
 
 
 def color2bw(img):
