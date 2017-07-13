@@ -100,20 +100,20 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256)):
         img_id += 1
 
 
-def scale(img, feature_range=(0, 255), target_range=(-1, 1)):
+def scale(img, original_range=(0, 255), target_range=(-1, 1)):
     """Pre-processing the RGB image
     Simple rescaling to the range [-1, 1]
 
     Args:
         img(numpy.ndarray): Natural image in numpy array.
-        feature_range: Min max range of the numpy array.
+        original_range: Min max range of the numpy array.
         target_range: Min max range of the desired output.
 
     Returns:
         Scaled image
     """
-    scaler = MinMaxScaler(feature_range=feature_range)
-    scaler.fit([[target_range[0]], [target_range[1]]])
+    scaler = MinMaxScaler(feature_range=target_range)
+    scaler.fit([[original_range[0]], [original_range[1]]])
     img = scaler.transform(img)
 
     return img.astype(np.float32)

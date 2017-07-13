@@ -300,8 +300,8 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
         bw_array = bw_img_.eval()
         colored_array = colored_img_.eval()
 
-        bw_array = scale(bw_array, feature_range=(0, 255))
-        colored_array = scale(colored_array, feature_range=(0, 255))
+        bw_array = scale(bw_array, original_range=(0, 255))
+        colored_array = scale(colored_array, original_range=(0, 255))
         bw = tf.convert_to_tensor(bw_array, dtype=tf.float32)
         colored = tf.convert_to_tensor(colored_array, dtype=tf.float32)
 
