@@ -3,7 +3,6 @@ from random import shuffle
 
 import numpy as np
 import tensorflow as tf
-from tools.image_process import scale
 
 
 def conv_avg_pool(x,
@@ -276,7 +275,6 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
     Returns:
         A tuple of black and white image batch and colored image patch.
     """
-
     def read_image(input_queue_):
         """Read images from specified files.
 
@@ -286,6 +284,37 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
         Returns:
             Two tensors, black-and-white and colored images read from the files.
         """
+        def scale(img, target_range=(-1, 1)):
+            """Scale the image from range 0 to 255 to a specified range.
+
+            X_scaled = (X - X.min) / (X.max - X.min)
+            X_scaled = X_scaled * (max - min) + min
+
+            Args:
+                img: Input tensor.
+                target_range: The min max range to scale the matrix to.
+
+            Returns:
+                Scaled image.
+            """
+            target_min, target_max = target_range
+
+            img_min = tf.constant(value=tf.reduce_min(img), shape=img.get_shape())
+            img_max = tf.constant(value=tf.reduce_max(img), shape=img.get_shape())
+
+            img_scaled = tf.div(
+                tf.subtract(img, img_min),
+                tf.subtract(img_max, img_min)
+            )
+            img_scaled = tf.add(
+                img_min,
+                tf.multiply(
+                    img_scaled,
+                    tf.subtract(target_max, target_min)
+                )
+            )
+            return img_scaled
+
         bw_img_file = tf.read_file(input_queue_[0])
         colored_img_file = tf.read_file(input_queue_[1])
         bw_img_ = tf.image.decode_jpeg(bw_img_file, channels=1)  # Decode as grayscale
@@ -297,15 +326,10 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
         bw_img_.set_shape([height, width, 1])
         colored_img_.set_shape([height, width, 3])
 
-        bw_array = bw_img_.eval()
-        colored_array = colored_img_.eval()
+        bw_scaled = scale(bw_img_)
+        colored_scaled = scale(colored_img_)
 
-        bw_array = scale(bw_array, original_range=(0, 255))
-        colored_array = scale(colored_array, original_range=(0, 255))
-        bw = tf.convert_to_tensor(bw_array, dtype=tf.float32)
-        colored = tf.convert_to_tensor(colored_array, dtype=tf.float32)
-
-        return bw, colored
+        return bw_scaled, colored_scaled
 
     bw_images, colored_images = images_tuple
 
@@ -314,7 +338,8 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
 
     bw_img, colored_img = read_image(input_queue)
     bw_batch, colored_batch = tf.train.batch([bw_img, colored_img],
-                                             batch_size=batch_size)
+                                             batch_size=batch_size,
+                                             allow_smaller_final_batch=True)
 
     return bw_batch, colored_batch
 
