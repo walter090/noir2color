@@ -273,15 +273,14 @@ def process_data(folder, bw_folder, test_size=0.1):
             'test': (test_bw_images, test_colored_images)}
 
 
-def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
+def input_pipeline(images_tuple, dim=(256, 256), batch_size=50):
     """Pipeline for inputting images.
 
     Args:
         images_tuple: Python tuple containing string typed tensors that
             are image file names. The tuple comes in the shape of
             (bw_images, colored_images)
-        height: Height of the image.
-        width: Width of the image.
+        dim: Size of images.
         batch_size: Size of each batch, default 50.
 
     Returns:
@@ -339,6 +338,7 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
         # decode_jpeg somehow does not set shape of the image, need to manually set.
         # Make sure bw_img and colored_img are on the same rank as they may be concatenated
         # in the future.
+        height, width = dim
         bw_img_.set_shape([height, width, 1])
         colored_img_.set_shape([height, width, 3])
 
@@ -395,8 +395,8 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
         flat = flatten(conv_out)
         fc_layers = [
             # num_output, activation
-            [1024, True],
-            [1, False],
+            [1024, False],
+            [1, True],
         ]
 
         output = flat
@@ -447,6 +447,8 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, b
 
         if deconv_layers is None:
             deconv_layers = [
+                # ksize, stride, out_channels
+                # ksize is divisible by stride to avoid checkerboard effect
                 [(4, 4), (2, 2), 256],
                 [(4, 4), (2, 2), 128],
                 [(4, 4), (2, 2), 64],
@@ -465,3 +467,54 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, b
 
         generated = tf.nn.tanh(deconvolved)
         return generated
+
+
+def build_and_train(batch_size=50,
+                    image_size=(256, 256),
+                    discriminator_scope='discriminator',
+                    generator_scope='generator'):
+    """Build and train the graph
+
+    Args:
+        batch_size: Size of each training batch.
+        image_size: Specify imported image size.
+        discriminator_scope: Name for the discriminator variable scope.
+        generator_scope: Name for the generator variable scope.
+
+    Returns:
+        None
+    """
+    tf.reset_default_graph()
+
+    input_placeholder = tf.placeholder(dtype=tf.float32)
+    input_base_placeholder = tf.placeholder(dtype=tf.float32)
+
+    # Generated image
+    generated = generator(input_placeholder, name=generator_scope)
+    # Discriminator probability for real images
+    real_prob = discriminator(input_placeholder,
+                              base_x=input_base_placeholder,
+                              name=discriminator_scope)
+    # Discriminator probability for fake images
+    fake_prob = discriminator(generated,
+                              base_x=input_base_placeholder,
+                              name=discriminator_scope,
+                              reuse_variables=True)
+
+    loss_disc = tf.reduce_mean(
+        # Maximize the likelihood of real images, and minimize
+        # likelihood of generated ones.
+        - (tf.log(real_prob) + tf.log(1 - fake_prob))
+    )
+    loss_gen = tf.reduce_mean(
+        # Maximize the likelihood of generated images.
+        - tf.log(fake_prob)
+    )
+
+    all_vars = tf.trainable_variables()
+    vars_disc = [var for var in all_vars if var.name.startswith(discriminator_scope)]
+    vars_gen = [var for var in all_vars if var.name.startswith(generator_scope)]
+
+    optimizer_disc = tf.train.AdamOptimizer().minimize(loss_disc, var_list=vars_disc)
+    optimizer_gen = tf.train.AdamOptimizer().minimize(loss_gen, var_list=vars_gen)
+
