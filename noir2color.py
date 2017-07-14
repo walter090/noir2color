@@ -356,6 +356,8 @@ def input_pipeline(images_tuple, dim=(256, 256), batch_size=50):
     bw_batch, colored_batch = tf.train.batch([bw_img, colored_img],
                                              batch_size=batch_size,
                                              allow_smaller_final_batch=True)
+    bw_batch.set_shape([batch_size, *dim, 1])
+    colored_batch.set_shape([batch_size, *dim, 3])
 
     return bw_batch, colored_batch
 
@@ -382,10 +384,10 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
         conv_layers = [
             # Specify each convolution layer parameters
             # conv_ksize, conv_stride, out_channels, pool_ksize, pool_stride
-            [(4, 4), (2, 2), 16, (4, 4), (2, 2)],
-            [(4, 4), (2, 2), 32, (4, 4), (2, 2)],
-            [(4, 4), (2, 2), 64, (2, 2), (1, 1)],
-            [(4, 4), (2, 2), 128, (2, 2), (1, 1)],
+            [(4, 4), (2, 2), 64, (4, 4), (2, 2)],
+            [(4, 4), (2, 2), 128, (4, 4), (2, 2)],
+            [(4, 4), (2, 2), 256, (2, 2), (1, 1)],
+            [(4, 4), (2, 2), 512, (2, 2), (1, 1)],
         ]
 
         conv_out = joint_x
@@ -429,11 +431,12 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, b
         if conv_layers is None:
             conv_layers = [
                 # filter size, stride, output channels
-                [(4, 4), (2, 2), 16],
                 [(4, 4), (2, 2), 32],
                 [(4, 4), (2, 2), 64],
                 [(4, 4), (2, 2), 128],
                 [(4, 4), (2, 2), 256],
+                [(4, 4), (2, 2), 512],
+                [(4, 4), (2, 2), 1024],
             ]
 
         convolved = input_x
@@ -449,10 +452,11 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, b
             deconv_layers = [
                 # ksize, stride, out_channels
                 # ksize is divisible by stride to avoid checkerboard effect
+                [(4, 4), (2, 2), 1024],
+                [(4, 4), (2, 2), 512],
                 [(4, 4), (2, 2), 256],
                 [(4, 4), (2, 2), 128],
                 [(4, 4), (2, 2), 64],
-                [(4, 4), (2, 2), 32],
                 [(4, 4), (2, 2), 3],
             ]
 
@@ -472,7 +476,10 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, b
 def build_and_train(batch_size=50,
                     image_size=(256, 256),
                     discriminator_scope='discriminator',
-                    generator_scope='generator'):
+                    generator_scope='generator',
+                    colored_folder='img_np',
+                    bw_folder='img_bw',
+                    test_size=0.1):
     """Build and train the graph
 
     Args:
@@ -480,6 +487,9 @@ def build_and_train(batch_size=50,
         image_size: Specify imported image size.
         discriminator_scope: Name for the discriminator variable scope.
         generator_scope: Name for the generator variable scope.
+        colored_folder: Directory of colored images.
+        bw_folder: Directory of black and white images.
+        test_size: Split factor for test set, defaults 0.1
 
     Returns:
         None
@@ -518,3 +528,11 @@ def build_and_train(batch_size=50,
     optimizer_disc = tf.train.AdamOptimizer().minimize(loss_disc, var_list=vars_disc)
     optimizer_gen = tf.train.AdamOptimizer().minimize(loss_gen, var_list=vars_gen)
 
+    session = tf.Session()
+    session.run(tf.global_variables_initializer())
+
+    input_files = process_data(folder=colored_folder,
+                               bw_folder=bw_folder,
+                               test_size=test_size)
+    train_data = input_files['train']
+    test_data = input_files['test']
