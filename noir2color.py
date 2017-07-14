@@ -437,6 +437,7 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, b
                 [(4, 4), (2, 2), 256],
                 [(4, 4), (2, 2), 512],
                 [(4, 4), (2, 2), 1024],
+                [(4, 4), (2, 2), 2048],
             ]
 
         convolved = input_x
@@ -452,6 +453,7 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, b
             deconv_layers = [
                 # ksize, stride, out_channels
                 # ksize is divisible by stride to avoid checkerboard effect
+                [(4, 4), (2, 2), 2048],
                 [(4, 4), (2, 2), 1024],
                 [(4, 4), (2, 2), 512],
                 [(4, 4), (2, 2), 256],
