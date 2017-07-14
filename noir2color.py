@@ -71,9 +71,21 @@ def lrelu(x, alpha=0.1):
     Returns:
         Output tensor
     """
-    linear = 0.5 * x + 0.5 * tf.abs(x)
-    leaky = 0.5 * alpha * x - 0.5 * alpha * tf.abs(x)
-    output = leaky + linear
+    # linear = 0.5 * x + 0.5 * tf.abs(x)
+    # leaky = 0.5 * alpha * x - 0.5 * alpha * tf.abs(x)
+    # output = leaky + linear
+
+    linear = tf.add(
+        tf.multiply(0.5, x),
+        tf.multiply(0.5, tf.abs(x))
+    )
+    half = tf.multiply(0.5, alpha)
+    leaky = tf.subtract(
+        tf.multiply(half, x),
+        tf.multiply(half, tf.abs(x))
+    )
+    output = tf.add(linear, leaky)
+
     return output
 
 
