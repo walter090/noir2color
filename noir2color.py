@@ -298,16 +298,18 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
                 Scaled image.
             """
             target_min, target_max = target_range
+            target_min = tf.cast(target_min, tf.float32)
+            target_max = tf.cast(target_max, tf.float32)
 
-            img_min = tf.constant(value=tf.reduce_min(img), shape=img.get_shape())
-            img_max = tf.constant(value=tf.reduce_max(img), shape=img.get_shape())
+            img_min = tf.fill(value=tf.reduce_min(img), dims=img.get_shape())
+            img_max = tf.fill(value=tf.reduce_max(img), dims=img.get_shape())
 
             img_scaled = tf.div(
                 tf.subtract(img, img_min),
                 tf.subtract(img_max, img_min)
             )
             img_scaled = tf.add(
-                img_min,
+                target_min,
                 tf.multiply(
                     img_scaled,
                     tf.subtract(target_max, target_min)
@@ -317,8 +319,10 @@ def input_pipeline(images_tuple, height=256, width=256, batch_size=50):
 
         bw_img_file = tf.read_file(input_queue_[0])
         colored_img_file = tf.read_file(input_queue_[1])
-        bw_img_ = tf.image.decode_jpeg(bw_img_file, channels=1)  # Decode as grayscale
-        colored_img_ = tf.image.decode_jpeg(colored_img_file, channels=3)  # Decode as RGB
+        bw_img_ = tf.cast(tf.image.decode_jpeg(bw_img_file, channels=1),
+                          tf.float32)  # Decode as grayscale
+        colored_img_ = tf.cast(tf.image.decode_jpeg(colored_img_file, channels=3),
+                               tf.float32)  # Decode as RGB
 
         # decode_jpeg somehow does not set shape of the image, need to manually set.
         # Make sure bw_img and colored_img are on the same rank as they may be concatenated
