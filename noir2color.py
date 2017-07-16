@@ -235,12 +235,12 @@ def batch_normalize(x, epsilon=1e-5):
         return normalized
 
 
-def process_data(folder, bw_folder, test_size=0.1, validation_size=0.1):
+def process_data(color_folder, bw_folder, test_size=0.1, validation_size=0.1):
     """Read and partition data.
     This function should be run before the input pipeline.
 
     Args:
-        folder: Directory to the unprocessed images.
+        color_folder: Directory to the unprocessed images.
         bw_folder: Directory to the black and white images.
         test_size: Test set size, float between 0 and 1, defaults 0.1
         validation_size: Validation set size, float between 0 and 1, defaults 0.1
@@ -252,9 +252,9 @@ def process_data(folder, bw_folder, test_size=0.1, validation_size=0.1):
     def file_sort(file_name):
         return int(file_name.split('.')[0])
 
-    img_list = sorted(os.listdir(folder), key=file_sort)
+    img_list = sorted(os.listdir(color_folder), key=file_sort)
     bw_img_list = sorted(os.listdir(bw_folder), key=file_sort)
-    img_list = [os.path.join(folder, img) for img in img_list]
+    img_list = [os.path.join(color_folder, img) for img in img_list]
     bw_img_list = [os.path.join(bw_folder, img) for img in bw_img_list]
 
     if validation_size + test_size >= 1:
@@ -271,20 +271,21 @@ def process_data(folder, bw_folder, test_size=0.1, validation_size=0.1):
     # Partition images into training and testing
     partition = [0] * total_samples
     partition[: total_test_size] = [1] * total_test_size
-    partition[total_validation_size:] = [2] * total_validation_size
+    partition[total_test_size: total_test_size + total_validation_size:] = \
+        [2] * total_validation_size
     shuffle(partition)
 
     train_colored_images, test_colored_images, validation_colored_images = \
-        tf.dynamic_partition(colored_images, partition, num_partitions=3)
+        tf.dynamic_partition(data=colored_images, partitions=partition, num_partitions=3)
     train_bw_images, test_bw_images, validation_bw_images = \
-        tf.dynamic_partition(bw_images, partition, num_partitions=3)
+        tf.dynamic_partition(data=bw_images, partitions=partition, num_partitions=3)
 
     return {'train': (train_bw_images, train_colored_images),
             'test': (test_bw_images, test_colored_images),
             'validation': (validation_bw_images, validation_colored_images)}
 
 
-def input_pipeline(images_tuple, dim=(256, 256), batch_size=50):
+def input_pipeline(images_tuple, dim=(256, 256), batch_size=50, epochs=None):
     """Pipeline for inputting images.
 
     Args:
@@ -297,6 +298,7 @@ def input_pipeline(images_tuple, dim=(256, 256), batch_size=50):
     Returns:
         A tuple of black and white image batch and colored image patch.
     """
+
     def read_image(input_queue_):
         """Read images from specified files.
 
@@ -306,6 +308,7 @@ def input_pipeline(images_tuple, dim=(256, 256), batch_size=50):
         Returns:
             Two tensors, black-and-white and colored images read from the files.
         """
+
         def scale(img, target_range=(-1, 1)):
             """Scale the image from range 0 to 255 to a specified range.
 
@@ -361,12 +364,11 @@ def input_pipeline(images_tuple, dim=(256, 256), batch_size=50):
     bw_images, colored_images = images_tuple
 
     # Create an input queue, a queue of string tensors that are image file names.
-    input_queue = tf.train.slice_input_producer([bw_images, colored_images])
+    input_queue = tf.train.slice_input_producer([bw_images, colored_images], num_epochs=epochs)
 
     bw_img, colored_img = read_image(input_queue)
     bw_batch, colored_batch = tf.train.batch([bw_img, colored_img],
-                                             batch_size=batch_size,
-                                             allow_smaller_final_batch=True)
+                                             batch_size=batch_size)
     bw_batch.set_shape([batch_size, *dim, 1])
     colored_batch.set_shape([batch_size, *dim, 3])
 
@@ -498,7 +500,8 @@ def build_and_train(epochs,
                     save_model_to='saved_model',
                     test_size=0.1,
                     validation_size=0.1,
-                    early_stopping=True):
+                    early_stopping=True,
+                    check_interval=50):
     """Build and train the graph
 
     Args:
@@ -514,6 +517,7 @@ def build_and_train(epochs,
         validation_size: Split factor for validation set, defaults 0.1
         early_stopping: Set True to apply early stopping in the training
             processing. Defaults True.
+        check_interval: Epoch interval to check loss.
 
     Returns:
         None
@@ -549,29 +553,69 @@ def build_and_train(epochs,
     vars_disc = [var for var in all_vars if var.name.startswith(discriminator_scope)]
     vars_gen = [var for var in all_vars if var.name.startswith(generator_scope)]
 
-    optimizer_disc = tf.train.AdamOptimizer().minimize(loss_disc, var_list=vars_disc)
-    optimizer_gen = tf.train.AdamOptimizer().minimize(loss_gen, var_list=vars_gen)
+    global_step = tf.Variable(0, trainable=False)
 
-    session = tf.Session()
-    session.run(tf.global_variables_initializer())
+    # Define optimizers
+    optimizer_disc = tf.train.AdamOptimizer().minimize(loss_disc,
+                                                       var_list=vars_disc,
+                                                       global_step=global_step)
+    optimizer_gen = tf.train.AdamOptimizer().minimize(loss_gen,
+                                                      var_list=vars_gen,
+                                                      global_step=global_step)
 
-    input_files = process_data(folder=colored_folder,
+    # Start input pipeline
+    input_files = process_data(color_folder=colored_folder,
                                bw_folder=bw_folder,
                                test_size=test_size,
                                validation_size=validation_size)
-    train_data = input_files['train']
+    train_data = input_files['train']  # train_data is a tuple
     bw_batch, color_batch = input_pipeline(train_data,
                                            dim=image_size,
-                                           batch_size=batch_size)
+                                           batch_size=batch_size,
+                                           epochs=epochs)
 
+    dataset_size = tf.size(bw_batch)
+    n_batches = tf.floordiv(dataset_size, batch_size)  # Number of batches in the entire set
+    # Number of epochs can be calculated from global_step // n_batches
+
+    # Initialize session
+    session = tf.Session()
     session.run(tf.global_variables_initializer())
     saver = tf.train.Saver()
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord, sess=session)
 
-    for epoch_i in range(epochs):
-        try:
-            while not coord.should_stop():
-                raise NotImplementedError
-        except tf.errors.OutOfRangeError:
-            print('')
+    low_g_loss, low_d_loss = np.inf
+    try:
+        while not coord.should_stop():
+            _, __, discriminator_loss, generator_loss, current_epoch, leftover = \
+                session.run([
+                    optimizer_disc,
+                    optimizer_gen,
+                    loss_disc,
+                    loss_gen,
+                    tf.floordiv(global_step, n_batches),
+                    tf.mod(tf.div(global_step, n_batches), check_interval)
+                ], feed_dict={
+                    input_placeholder: color_batch,
+                    input_base_placeholder: bw_batch
+                })
+
+            if leftover == 0:
+                print('Epoch #{}, discriminator loss {}, generator loss {}'
+                      .format(current_epoch, discriminator_loss, generator_loss))
+                if generator_loss < low_g_loss \
+                        and discriminator_loss < low_d_loss \
+                        and early_stopping:
+                    # Save current winner model
+                    low_g_loss = generator_loss
+                    low_d_loss = discriminator_loss
+                    saver.save(session, save_path=save_model_to, global_step=global_step)
+
+    except tf.errors.OutOfRangeError:
+        print('Training complete.')
+    finally:
+        coord.request_stop()
+
+    coord.join(threads)
+    session.close()
