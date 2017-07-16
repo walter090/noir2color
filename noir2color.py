@@ -103,15 +103,15 @@ def flatten(x):
     return tf.reshape(x, shape=[-1, np.prod(x.get_shape().as_list()[1:])])
 
 
-def fully_conn(x, num_output, name='fc', activation=True):
+def fully_conn(x, num_output, name='fc', activation='lrelu'):
     """Fully connected layer, this is is last parts of convnet.
     Fully connect layer requires each image in the batch be flattened.
 
     Args:
-        x(Tensor): Input from the previous layer.
-        num_output(int): Output size of the fully connected layer.
-        name(str): Name for the fully connected layer variable scope.
-        activation(bool): Set to True to add a leaky relu after fully connected
+        x: Input from the previous layer.
+        num_output: Output size of the fully connected layer.
+        name: Name for the fully connected layer variable scope.
+        activation: Set to True to add a leaky relu after fully connected
             layer. Set this argument to False if this is the final layer.
 
     Returns:
@@ -125,8 +125,12 @@ def fully_conn(x, num_output, name='fc', activation=True):
 
         output = tf.nn.bias_add(tf.matmul(x, weights), biases)
 
-        if activation:
+        if activation == 'sigmoid':
+            output = tf.sigmoid(output)
+        elif activation == 'lrelu':
             output = lrelu(output)
+        else:
+            raise ValueError
 
         return output
 
@@ -231,7 +235,7 @@ def batch_normalize(x, epsilon=1e-5):
         return normalized
 
 
-def process_data(folder, bw_folder, test_size=0.1):
+def process_data(folder, bw_folder, test_size=0.1, validation_size=0.1):
     """Read and partition data.
     This function should be run before the input pipeline.
 
@@ -239,6 +243,7 @@ def process_data(folder, bw_folder, test_size=0.1):
         folder: Directory to the unprocessed images.
         bw_folder: Directory to the black and white images.
         test_size: Test set size, float between 0 and 1, defaults 0.1
+        validation_size: Validation set size, float between 0 and 1, defaults 0.1
 
     Returns:
         A dictionary of tensors containing image file names.
@@ -252,8 +257,12 @@ def process_data(folder, bw_folder, test_size=0.1):
     img_list = [os.path.join(folder, img) for img in img_list]
     bw_img_list = [os.path.join(bw_folder, img) for img in bw_img_list]
 
+    if validation_size + test_size >= 1:
+        raise ValueError('Test and validation sets size larger than entire dataset.')
+
     total_samples = len(img_list)
     total_test_size = int(test_size * total_samples)
+    total_validation_size = int(validation_size * total_samples)
 
     # List of image file names.
     colored_images = tf.convert_to_tensor(img_list, dtype=tf.string)
@@ -262,15 +271,17 @@ def process_data(folder, bw_folder, test_size=0.1):
     # Partition images into training and testing
     partition = [0] * total_samples
     partition[: total_test_size] = [1] * total_test_size
+    partition[total_validation_size:] = [2] * total_validation_size
     shuffle(partition)
 
-    train_colored_images, test_colored_images = \
-        tf.dynamic_partition(colored_images, partition, num_partitions=2)
-    train_bw_images, test_bw_images = \
-        tf.dynamic_partition(bw_images, partition, num_partitions=2)
+    train_colored_images, test_colored_images, validation_colored_images = \
+        tf.dynamic_partition(colored_images, partition, num_partitions=3)
+    train_bw_images, test_bw_images, validation_bw_images = \
+        tf.dynamic_partition(bw_images, partition, num_partitions=3)
 
     return {'train': (train_bw_images, train_colored_images),
-            'test': (test_bw_images, test_colored_images)}
+            'test': (test_bw_images, test_colored_images),
+            'validation': (validation_bw_images, validation_colored_images)}
 
 
 def input_pipeline(images_tuple, dim=(256, 256), batch_size=50):
@@ -397,14 +408,16 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
         flat = flatten(conv_out)
         fc_layers = [
             # num_output, activation
-            [1024, False],
-            [1, True],
+            [1024, 'lrelu'],
+            [1, 'sigmoid'],
         ]
 
         output = flat
         for layer_i, layer in enumerate(fc_layers):
-            output = fully_conn(output, num_output=layer[0],
-                                activation=layer[1], name='disc_fc_{}'.format(layer_i))
+            output = fully_conn(output,
+                                num_output=layer[0],
+                                activation=layer[1],
+                                name='disc_fc_{}'.format(layer_i))
 
         return output
 
@@ -475,23 +488,32 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, b
         return generated
 
 
-def build_and_train(batch_size=50,
+def build_and_train(epochs,
+                    batch_size=20,
                     image_size=(256, 256),
                     discriminator_scope='discriminator',
                     generator_scope='generator',
                     colored_folder='img_np',
                     bw_folder='img_bw',
-                    test_size=0.1):
+                    save_model_to='saved_model',
+                    test_size=0.1,
+                    validation_size=0.1,
+                    early_stopping=True):
     """Build and train the graph
 
     Args:
+        epochs: Number of training epochs.
         batch_size: Size of each training batch.
         image_size: Specify imported image size.
         discriminator_scope: Name for the discriminator variable scope.
         generator_scope: Name for the generator variable scope.
         colored_folder: Directory of colored images.
         bw_folder: Directory of black and white images.
+        save_model_to: Location to save the model to.
         test_size: Split factor for test set, defaults 0.1
+        validation_size: Split factor for validation set, defaults 0.1
+        early_stopping: Set True to apply early stopping in the training
+            processing. Defaults True.
 
     Returns:
         None
@@ -535,6 +557,21 @@ def build_and_train(batch_size=50,
 
     input_files = process_data(folder=colored_folder,
                                bw_folder=bw_folder,
-                               test_size=test_size)
+                               test_size=test_size,
+                               validation_size=validation_size)
     train_data = input_files['train']
-    test_data = input_files['test']
+    bw_batch, color_batch = input_pipeline(train_data,
+                                           dim=image_size,
+                                           batch_size=batch_size)
+
+    session.run(tf.global_variables_initializer())
+    saver = tf.train.Saver()
+    coord = tf.train.Coordinator()
+    threads = tf.train.start_queue_runners(coord=coord, sess=session)
+
+    for epoch_i in range(epochs):
+        try:
+            while not coord.should_stop():
+                raise NotImplementedError
+        except tf.errors.OutOfRangeError:
+            print('')
