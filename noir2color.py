@@ -502,8 +502,10 @@ def build_and_train(epochs,
                     save_model_to='saved_model',
                     model_name='trained_model',
                     test_size=0.1,
-                    noise=True,
-                    z_dim=1):
+                    noise=False,
+                    z_dim=1,
+                    sigmoid_weight=1.0,
+                    l1_weight=0.5):
     """Build and train the graph
 
     Args:
@@ -521,6 +523,8 @@ def build_and_train(epochs,
         test_size: Split factor for test set, defaults 0.1
         noise: Set to True to add noise to the generator.
         z_dim: Dimension of noise.
+        sigmoid_weight: Weight for sigmoid cross entropy loss.
+        l1_weight: Weight for l1 loss.
 
     Returns:
         None
@@ -564,10 +568,10 @@ def build_and_train(epochs,
         tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake,
                                                 labels=tf.ones_like(logits_fake))
     )
-    loss_gen_l2 = tf.reduce_mean(
+    loss_gen_l1 = tf.reduce_mean(
         tf.abs(generated - color_batch)
     )
-    loss_gen = loss_gen_sigmoid + loss_gen_l2 * 0.5
+    loss_gen = loss_gen_sigmoid * sigmoid_weight + loss_gen_l1 * l1_weight
 
     all_vars = tf.trainable_variables()
     vars_disc = [var for var in all_vars if var.name.startswith(discriminator_scope)]
@@ -616,7 +620,9 @@ def build_and_train(epochs,
                 print('Current epoch {}, current step{}, discriminator loss {}, generator loss {}'
                       .format(current_epoch, current_step, discriminator_loss, generator_loss))
                 if save_model:
-                    saver.save(sess=session, save_path=os.path.join(save_model_to, model_name))
+                    saver.save(sess=session,
+                               save_path=os.path.join(save_model_to, model_name),
+                               global_step=global_step)
 
     except tf.errors.OutOfRangeError:
         print('Training complete.')
@@ -629,3 +635,69 @@ def build_and_train(epochs,
 
 def model_test(saved_model):
     raise NotImplementedError
+
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-e', '--epochs', type=int, dest='epochs',
+                        help='Specify number of epochs to train. You mush specify'
+                             'this argument as it does not have a default.')
+    parser.add_argument('-v', '-verb-interval', type=int, default=1000, dest='verbose_interval',
+                        help='Specify number of steps to print a message')
+    parser.add_argument('-b', '--batch-size', type=int, default=20, dest='batch_size',
+                        help='Set batch size')
+    parser.add_argument('--height', type=int, default=256, dest='height',
+                        help='Set imported image height')
+    parser.add_argument('--width', type=int, default=256, dest='width',
+                        help='Set imported image width')
+
+    save_model_group = parser.add_mutually_exclusive_group()
+    save_model_group.add_argument('-s', '--save-model', action='store_true', dest='save_model')
+    save_model_group.add_argument('--no-save-model', action='store_false', dest='save_model')
+
+    parser.add_argument('--disc-name', type=str, default='discriminator', dest='discriminator_scope',
+                        help='Specify discriminator variable scope name.')
+    parser.add_argument('--gen-name', type=str, default='generator', dest='generator_scope',
+                        help='Specify generator variable scope name.')
+    parser.add_argument('--colored-folder', type=str, default='img_np', dest='colored_folder',
+                        help='Specify folder that stores colored images.')
+    parser.add_argument('--bw-folder', type=str, default='img_np', dest='bw_folder',
+                        help='Specify folder that stores black and white images.')
+    parser.add_argument('--save-model-to', type=str, default='saved_model', dest='save_model_to',
+                        help='Directory to save trained models.')
+    parser.add_argument('--model-name', type=str, default='trained_model', dest='model_name',
+                        help='Name to save trained models as.')
+    parser.add_argument('--test-size', type=float, default=0.1, dest='test_size',
+                        help='Test size')
+
+    noise_group = parser.add_mutually_exclusive_group()
+    noise_group.add_argument('--add-noise', action='store_true', dest='noise')
+    noise_group.add_argument('--no-noise', action='store_false', dest='noise')
+
+    parser.add_argument('--z-dim', type=float, default=1, dest='z_dim',
+                        help='Noise dimension')
+    parser.add_argument('--sigmoid-weight', type=float, default=1.0, dest='sigmoid_weight',
+                        help='Weight for sigmoid cross entropy loss.')
+    parser.add_argument('--l1-weight', type=float, default=0.5, dest='l1_weight',
+                        help='Weight for l1 loss.')
+
+    args = parser.parse_args()
+
+    build_and_train(epochs=args.epochs,
+                    verbose_interval=args.verbose_interval,
+                    batch_size=args.batch_size,
+                    image_size=(args.height, args.width),
+                    save_model=args.save_model,
+                    discriminator_scope=args.discriminator_scope,
+                    generator_scope=args.generator_scope,
+                    colored_folder=args.colored_folder,
+                    bw_folder=args.bw_folder,
+                    save_model_to=args.save_model_to,
+                    model_name=args.model_name,
+                    test_size=args.test_size,
+                    noise=args.noise,
+                    z_dim=args.z_dim,
+                    sigmoid_weight=args.sigmoid_weight,
+                    l1_weight=args.l1_weight)
