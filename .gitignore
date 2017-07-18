@@ -5,3 +5,4 @@ img_np/
 img_bw/
 images_raw/
 train.ipynb
+saved_model/

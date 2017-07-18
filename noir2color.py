@@ -3,6 +3,7 @@ from random import shuffle
 
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
 
 def conv_avg_pool(x,
@@ -130,7 +131,7 @@ def fully_conn(x, num_output, name='fc', activation='lrelu'):
         elif activation == 'lrelu':
             output = lrelu(output)
         else:
-            raise ValueError
+            pass
 
         return output
 
@@ -235,7 +236,7 @@ def batch_normalize(x, epsilon=1e-5):
         return normalized
 
 
-def process_data(color_folder, bw_folder, test_size=0.1, validation_size=0.1):
+def process_data(color_folder, bw_folder, test_size=0.1):
     """Read and partition data.
     This function should be run before the input pipeline.
 
@@ -243,7 +244,6 @@ def process_data(color_folder, bw_folder, test_size=0.1, validation_size=0.1):
         color_folder: Directory to the unprocessed images.
         bw_folder: Directory to the black and white images.
         test_size: Test set size, float between 0 and 1, defaults 0.1
-        validation_size: Validation set size, float between 0 and 1, defaults 0.1
 
     Returns:
         A dictionary of tensors containing image file names.
@@ -257,12 +257,11 @@ def process_data(color_folder, bw_folder, test_size=0.1, validation_size=0.1):
     img_list = [os.path.join(color_folder, img) for img in img_list]
     bw_img_list = [os.path.join(bw_folder, img) for img in bw_img_list]
 
-    if validation_size + test_size >= 1:
-        raise ValueError('Test and validation sets size larger than entire dataset.')
+    if test_size >= 1:
+        raise ValueError('Test set size larger than entire dataset.')
 
     total_samples = len(img_list)
     total_test_size = int(test_size * total_samples)
-    total_validation_size = int(validation_size * total_samples)
 
     # List of image file names.
     colored_images = tf.convert_to_tensor(img_list, dtype=tf.string)
@@ -271,27 +270,25 @@ def process_data(color_folder, bw_folder, test_size=0.1, validation_size=0.1):
     # Partition images into training and testing
     partition = [0] * total_samples
     partition[: total_test_size] = [1] * total_test_size
-    partition[total_test_size: total_test_size + total_validation_size:] = \
-        [2] * total_validation_size
     shuffle(partition)
 
-    train_colored_images, test_colored_images, validation_colored_images = \
-        tf.dynamic_partition(data=colored_images, partitions=partition, num_partitions=3)
-    train_bw_images, test_bw_images, validation_bw_images = \
-        tf.dynamic_partition(data=bw_images, partitions=partition, num_partitions=3)
+    train_colored_images, test_colored_images = \
+        tf.dynamic_partition(data=colored_images, partitions=partition, num_partitions=2)
+    train_bw_images, test_bw_images = \
+        tf.dynamic_partition(data=bw_images, partitions=partition, num_partitions=2)
 
     return {'train': (train_bw_images, train_colored_images),
-            'test': (test_bw_images, test_colored_images),
-            'validation': (validation_bw_images, validation_colored_images)}
+            'test': (test_bw_images, test_colored_images)}
 
 
-def input_pipeline(images_tuple, dim=(256, 256), batch_size=50, epochs=None):
+def input_pipeline(images_tuple, epochs, dim=(256, 256), batch_size=50):
     """Pipeline for inputting images.
 
     Args:
         images_tuple: Python tuple containing string typed tensors that
             are image file names. The tuple comes in the shape of
             (bw_images, colored_images)
+        epochs: Number of epochs to train.
         dim: Size of images.
         batch_size: Size of each batch, default 50.
 
@@ -411,7 +408,7 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
         fc_layers = [
             # num_output, activation
             [1024, 'lrelu'],
-            [1, 'sigmoid'],
+            [1, None],
         ]
 
         output = flat
@@ -421,10 +418,11 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
                                 activation=layer[1],
                                 name='disc_fc_{}'.format(layer_i))
 
-        return output
+        return output, tf.nn.sigmoid(output)
 
 
-def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, batchnorm=True):
+def generator(input_x, noise=True, z_dim=1, name='generator',
+              conv_layers=None, deconv_layers=None, batchnorm=True):
     """Generator network
 
     Args:
@@ -440,8 +438,10 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, b
         Generated image
     """
     with tf.variable_scope(name):
-        input_z = tf.random_normal(shape=input_x.get_shape(), stddev=0.02, dtype=tf.float32)
-        input_x = tf.concat([input_x, input_z], axis=3)
+        if noise:
+            input_z = tf.random_normal(shape=input_x.get_shape().as_list()[: 3] + [z_dim],
+                                       stddev=0.02, dtype=tf.float32)
+            input_x = tf.concat([input_x, input_z], axis=3)
 
         if conv_layers is None:
             conv_layers = [
@@ -491,63 +491,83 @@ def generator(input_x, name='generator', conv_layers=None, deconv_layers=None, b
 
 
 def build_and_train(epochs,
+                    verbose_interval=1000,
                     batch_size=20,
                     image_size=(256, 256),
+                    save_model=True,
                     discriminator_scope='discriminator',
                     generator_scope='generator',
                     colored_folder='img_np',
                     bw_folder='img_bw',
                     save_model_to='saved_model',
+                    model_name='trained_model',
                     test_size=0.1,
-                    validation_size=0.1,
-                    early_stopping=True,
-                    check_interval=50):
+                    noise=True,
+                    z_dim=1):
     """Build and train the graph
 
     Args:
         epochs: Number of training epochs.
+        verbose_interval: Interval between training messages.
         batch_size: Size of each training batch.
         image_size: Specify imported image size.
+        save_model: Set to True to save model periodically.
         discriminator_scope: Name for the discriminator variable scope.
         generator_scope: Name for the generator variable scope.
         colored_folder: Directory of colored images.
         bw_folder: Directory of black and white images.
         save_model_to: Location to save the model to.
+        model_name: Name for the saved model.
         test_size: Split factor for test set, defaults 0.1
-        validation_size: Split factor for validation set, defaults 0.1
-        early_stopping: Set True to apply early stopping in the training
-            processing. Defaults True.
-        check_interval: Epoch interval to check loss.
+        noise: Set to True to add noise to the generator.
+        z_dim: Dimension of noise.
 
     Returns:
         None
     """
     tf.reset_default_graph()
 
-    input_placeholder = tf.placeholder(dtype=tf.float32)
-    input_base_placeholder = tf.placeholder(dtype=tf.float32)
+    # Start input pipeline
+    input_files = process_data(color_folder=colored_folder,
+                               bw_folder=bw_folder,
+                               test_size=test_size, )
+    train_data = input_files['train']  # train_data is a tuple
+    bw_batch, color_batch = input_pipeline(train_data,
+                                           dim=image_size,
+                                           batch_size=batch_size,
+                                           epochs=epochs)
 
     # Generated image
-    generated = generator(input_placeholder, name=generator_scope)
+    generated = generator(bw_batch, name=generator_scope, noise=noise, z_dim=z_dim)
     # Discriminator probability for real images
-    real_prob = discriminator(input_placeholder,
-                              base_x=input_base_placeholder,
-                              name=discriminator_scope)
+    logits_real, real_prob = discriminator(input_x=color_batch,
+                                           base_x=bw_batch,
+                                           name=discriminator_scope)
     # Discriminator probability for fake images
-    fake_prob = discriminator(generated,
-                              base_x=input_base_placeholder,
-                              name=discriminator_scope,
-                              reuse_variables=True)
+    logits_fake, fake_prob = discriminator(input_x=generated,
+                                           base_x=bw_batch,
+                                           name=discriminator_scope,
+                                           reuse_variables=True)
 
-    loss_disc = tf.reduce_mean(
-        # Maximize the likelihood of real images, and minimize
-        # likelihood of generated ones.
-        - (tf.log(real_prob) + tf.log(1 - fake_prob))
+    loss_disc_real = tf.reduce_mean(
+        # Maximize the likelihood of real images
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_real,
+                                                labels=tf.ones_like(logits_real))
     )
-    loss_gen = tf.reduce_mean(
-        # Maximize the likelihood of generated images.
-        - tf.log(fake_prob)
+    loss_disc_fake = tf.reduce_mean(
+        # Minimize the likelihood of generated images.
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake,
+                                                labels=tf.zeros_like(logits_fake))
     )
+    loss_disc = loss_disc_fake + loss_disc_real
+    loss_gen_sigmoid = tf.reduce_mean(
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake,
+                                                labels=tf.ones_like(logits_fake))
+    )
+    loss_gen_l2 = tf.reduce_mean(
+        tf.abs(generated - color_batch)
+    )
+    loss_gen = loss_gen_sigmoid + loss_gen_l2 * 0.5
 
     all_vars = tf.trainable_variables()
     vars_disc = [var for var in all_vars if var.name.startswith(discriminator_scope)]
@@ -563,54 +583,40 @@ def build_and_train(epochs,
                                                       var_list=vars_gen,
                                                       global_step=global_step)
 
-    # Start input pipeline
-    input_files = process_data(color_folder=colored_folder,
-                               bw_folder=bw_folder,
-                               test_size=test_size,
-                               validation_size=validation_size)
-    train_data = input_files['train']  # train_data is a tuple
-    bw_batch, color_batch = input_pipeline(train_data,
-                                           dim=image_size,
-                                           batch_size=batch_size,
-                                           epochs=epochs)
-
     dataset_size = tf.size(bw_batch)
     n_batches = tf.floordiv(dataset_size, batch_size)  # Number of batches in the entire set
     # Number of epochs can be calculated from global_step // n_batches
 
     # Initialize session
     session = tf.Session()
+
     session.run(tf.global_variables_initializer())
-    saver = tf.train.Saver()
+    session.run(tf.local_variables_initializer())
+
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord, sess=session)
 
-    low_g_loss, low_d_loss = np.inf
+    saver = tf.train.Saver(max_to_keep=3)
+
     try:
         while not coord.should_stop():
-            _, __, discriminator_loss, generator_loss, current_epoch, leftover = \
+            _, __, discriminator_loss, generator_loss, current_epoch, current_step = \
                 session.run([
                     optimizer_disc,
                     optimizer_gen,
                     loss_disc,
                     loss_gen,
                     tf.floordiv(global_step, n_batches),
-                    tf.mod(tf.div(global_step, n_batches), check_interval)
-                ], feed_dict={
-                    input_placeholder: color_batch,
-                    input_base_placeholder: bw_batch
-                })
+                    global_step
+                ])
 
-            if leftover == 0:
-                print('Epoch #{}, discriminator loss {}, generator loss {}'
-                      .format(current_epoch, discriminator_loss, generator_loss))
-                if generator_loss < low_g_loss \
-                        and discriminator_loss < low_d_loss \
-                        and early_stopping:
-                    # Save current winner model
-                    low_g_loss = generator_loss
-                    low_d_loss = discriminator_loss
-                    saver.save(session, save_path=save_model_to, global_step=global_step)
+            if current_epoch > epochs:
+                break
+            if current_step % verbose_interval == 0:
+                print('Current epoch {}, current step{}, discriminator loss {}, generator loss {}'
+                      .format(current_epoch, current_step, discriminator_loss, generator_loss))
+                if save_model:
+                    saver.save(sess=session, save_path=os.path.join(save_model_to, model_name))
 
     except tf.errors.OutOfRangeError:
         print('Training complete.')
@@ -619,3 +625,7 @@ def build_and_train(epochs,
 
     coord.join(threads)
     session.close()
+
+
+def model_test(saved_model):
+    raise NotImplementedError
