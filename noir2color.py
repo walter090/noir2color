@@ -509,7 +509,9 @@ def build_and_train(epochs,
                     z_dim=1,
                     sigmoid_weight=1.0,
                     l1_weight=0.5,
-                    epsilon=10e-10):
+                    epsilon=10e-10,
+                    disc_lr=10e-5,
+                    gen_lr=10e-6):
     """Build and train the graph
 
     Args:
@@ -530,7 +532,9 @@ def build_and_train(epochs,
         z_dim: Dimension of noise.
         sigmoid_weight: Weight for sigmoid cross entropy loss.
         l1_weight: Weight for l1 loss.
-        epsilon: Fuzzy factor.
+        epsilon: Fuzzy factor for loss functions.
+        disc_lr: Learning rate for discriminator optimizer.
+        gen_lr: Learning rate for generator optimizer.
 
     Returns:
         None
@@ -591,13 +595,13 @@ def build_and_train(epochs,
 
     # Define optimizers
     optimizer_disc = \
-        tf.train.AdamOptimizer(learning_rate=10e-4).minimize(loss_disc,
-                                                             var_list=vars_disc,
-                                                             global_step=global_step)
+        tf.train.AdamOptimizer(learning_rate=disc_lr).minimize(loss_disc,
+                                                               var_list=vars_disc,
+                                                               global_step=global_step)
     optimizer_gen = \
-        tf.train.AdamOptimizer(learning_rate=10e-6).minimize(loss_gen,
-                                                             var_list=vars_gen,
-                                                             global_step=global_step)
+        tf.train.AdamOptimizer(learning_rate=gen_lr).minimize(loss_gen,
+                                                              var_list=vars_gen,
+                                                              global_step=global_step)
 
     dataset_size = bw_batch.get_shape().as_list()[0]
     n_batches = tf.floordiv(dataset_size, batch_size)  # Number of batches in the entire set
@@ -699,6 +703,10 @@ if __name__ == '__main__':
                         help='Weight for sigmoid cross entropy loss.')
     parser.add_argument('--l1-weight', type=float, default=0.5, dest='l1_weight',
                         help='Weight for l1 loss.')
+    parser.add_argument('--disc-lr', type=float, default=10e-5, dest='disc_lr',
+                        help='Learning rate for discriminator optimizer.')
+    parser.add_argument('--gen-lr', type=float, default=10e-6, dest='gen_lr',
+                        help='Learning rate for generator optimizer.')
 
     args = parser.parse_args()
 
@@ -718,4 +726,6 @@ if __name__ == '__main__':
                     z_dim=args.z_dim,
                     sigmoid_weight=args.sigmoid_weight,
                     l1_weight=args.l1_weight,
-                    save_interval=args.save_interval)
+                    save_interval=args.save_interval,
+                    disc_lr=args.disc_lr,
+                    gen_lr=args.gen_lr)
