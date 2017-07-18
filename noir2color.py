@@ -591,15 +591,15 @@ def build_and_train(epochs,
 
     # Define optimizers
     optimizer_disc = \
-        tf.train.AdamOptimizer(learning_rate=0.00001).minimize(loss_disc,
-                                                               var_list=vars_disc,
-                                                               global_step=global_step)
+        tf.train.AdamOptimizer(learning_rate=10e-4).minimize(loss_disc,
+                                                             var_list=vars_disc,
+                                                             global_step=global_step)
     optimizer_gen = \
-        tf.train.AdamOptimizer(learning_rate=0.00001).minimize(loss_gen,
-                                                               var_list=vars_gen,
-                                                               global_step=global_step)
+        tf.train.AdamOptimizer(learning_rate=10e-6).minimize(loss_gen,
+                                                             var_list=vars_gen,
+                                                             global_step=global_step)
 
-    dataset_size = tf.size(bw_batch)
+    dataset_size = bw_batch.get_shape().as_list()[0]
     n_batches = tf.floordiv(dataset_size, batch_size)  # Number of batches in the entire set
     # Number of epochs can be calculated from global_step // n_batches
 
