@@ -59,6 +59,9 @@ def load_image(image_file, output_size=(256, 256)):
     img = crop(img)
     img.load()
     img_as_list = np.asarray(img, dtype='int32').astype('uint8')
+    if np.any(np.isnan(img_as_list)):
+        print('NaN in images')
+        raise TypeError
     resized_img = resize(img_as_list, output_size, mode='wrap')
     return resized_img
 

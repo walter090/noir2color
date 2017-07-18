@@ -3,7 +3,6 @@ from random import shuffle
 
 import numpy as np
 import tensorflow as tf
-import matplotlib.pyplot as plt
 
 
 def conv_avg_pool(x,
@@ -252,8 +251,11 @@ def process_data(color_folder, bw_folder, test_size=0.1):
     def file_sort(file_name):
         return int(file_name.split('.')[0])
 
-    img_list = sorted(os.listdir(color_folder), key=file_sort)
-    bw_img_list = sorted(os.listdir(bw_folder), key=file_sort)
+    img_list = [img for img in os.listdir(color_folder) if not img.split('.')[0] == '']
+    bw_img_list = [img for img in os.listdir(bw_folder) if not img.split('.')[0] == '']
+
+    img_list = sorted(img_list, key=file_sort)
+    bw_img_list = sorted(bw_img_list, key=file_sort)
     img_list = [os.path.join(color_folder, img) for img in img_list]
     bw_img_list = [os.path.join(bw_folder, img) for img in bw_img_list]
 
@@ -394,10 +396,10 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
         conv_layers = [
             # Specify each convolution layer parameters
             # conv_ksize, conv_stride, out_channels, pool_ksize, pool_stride
-            [(4, 4), (2, 2), 64, (4, 4), (2, 2)],
             [(4, 4), (2, 2), 128, (4, 4), (2, 2)],
             [(4, 4), (2, 2), 256, (2, 2), (1, 1)],
             [(4, 4), (2, 2), 512, (2, 2), (1, 1)],
+            [(4, 4), (2, 2), 1024, (2, 2), (1, 1)]
         ]
 
         conv_out = joint_x
@@ -427,6 +429,8 @@ def generator(input_x, noise=True, z_dim=1, name='generator',
 
     Args:
         input_x: Input image
+        noise: Set True to add noise to input
+        z_dim: Noise dimension
         name: Variable scope name
         conv_layers: A list of lists specifying parameters for each conv layer.
             Defaults None.
@@ -446,7 +450,6 @@ def generator(input_x, noise=True, z_dim=1, name='generator',
         if conv_layers is None:
             conv_layers = [
                 # filter size, stride, output channels
-                [(4, 4), (2, 2), 32],
                 [(4, 4), (2, 2), 64],
                 [(4, 4), (2, 2), 128],
                 [(4, 4), (2, 2), 256],
@@ -473,7 +476,6 @@ def generator(input_x, noise=True, z_dim=1, name='generator',
                 [(4, 4), (2, 2), 512],
                 [(4, 4), (2, 2), 256],
                 [(4, 4), (2, 2), 128],
-                [(4, 4), (2, 2), 64],
                 [(4, 4), (2, 2), 3],
             ]
 
@@ -491,8 +493,9 @@ def generator(input_x, noise=True, z_dim=1, name='generator',
 
 
 def build_and_train(epochs,
-                    verbose_interval=1000,
-                    batch_size=20,
+                    verbose_interval=5,
+                    save_interval=500,
+                    batch_size=10,
                     image_size=(256, 256),
                     save_model=True,
                     discriminator_scope='discriminator',
@@ -505,12 +508,14 @@ def build_and_train(epochs,
                     noise=False,
                     z_dim=1,
                     sigmoid_weight=1.0,
-                    l1_weight=0.5):
+                    l1_weight=0.5,
+                    epsilon=10e-10):
     """Build and train the graph
 
     Args:
         epochs: Number of training epochs.
         verbose_interval: Interval between training messages.
+        save_interval: Interval to save the model.
         batch_size: Size of each training batch.
         image_size: Specify imported image size.
         save_model: Set to True to save model periodically.
@@ -525,6 +530,7 @@ def build_and_train(epochs,
         z_dim: Dimension of noise.
         sigmoid_weight: Weight for sigmoid cross entropy loss.
         l1_weight: Weight for l1 loss.
+        epsilon: Fuzzy factor.
 
     Returns:
         None
@@ -553,23 +559,27 @@ def build_and_train(epochs,
                                            name=discriminator_scope,
                                            reuse_variables=True)
 
+    real_epsilon = tf.fill(dims=logits_real.get_shape(), value=epsilon)
+    fake_epsilon = tf.fill(dims=logits_fake.get_shape(), value=epsilon)
+    fake_epsilon_gen = tf.fill(dims=generated.get_shape(), value=epsilon)
+
     loss_disc_real = tf.reduce_mean(
         # Maximize the likelihood of real images
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_real,
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_real + real_epsilon,
                                                 labels=tf.ones_like(logits_real))
     )
     loss_disc_fake = tf.reduce_mean(
         # Minimize the likelihood of generated images.
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake,
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake + fake_epsilon,
                                                 labels=tf.zeros_like(logits_fake))
     )
     loss_disc = loss_disc_fake + loss_disc_real
     loss_gen_sigmoid = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake,
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake + fake_epsilon,
                                                 labels=tf.ones_like(logits_fake))
     )
     loss_gen_l1 = tf.reduce_mean(
-        tf.abs(generated - color_batch)
+        tf.abs(generated - color_batch) + fake_epsilon_gen
     )
     loss_gen = loss_gen_sigmoid * sigmoid_weight + loss_gen_l1 * l1_weight
 
@@ -580,12 +590,14 @@ def build_and_train(epochs,
     global_step = tf.Variable(0, trainable=False)
 
     # Define optimizers
-    optimizer_disc = tf.train.AdamOptimizer().minimize(loss_disc,
-                                                       var_list=vars_disc,
-                                                       global_step=global_step)
-    optimizer_gen = tf.train.AdamOptimizer().minimize(loss_gen,
-                                                      var_list=vars_gen,
-                                                      global_step=global_step)
+    optimizer_disc = \
+        tf.train.AdamOptimizer(learning_rate=0.00001).minimize(loss_disc,
+                                                               var_list=vars_disc,
+                                                               global_step=global_step)
+    optimizer_gen = \
+        tf.train.AdamOptimizer(learning_rate=0.00001).minimize(loss_gen,
+                                                               var_list=vars_gen,
+                                                               global_step=global_step)
 
     dataset_size = tf.size(bw_batch)
     n_batches = tf.floordiv(dataset_size, batch_size)  # Number of batches in the entire set
@@ -614,11 +626,15 @@ def build_and_train(epochs,
                     global_step
                 ])
 
+            if discriminator_loss == np.nan or generator_loss == np.nan:
+                print('Training ended with an error at epoch {} batch {}'
+                      .format(current_epoch, current_step))
             if current_epoch > epochs:
                 break
             if current_step % verbose_interval == 0:
                 print('Current epoch {}, current step{}, discriminator loss {}, generator loss {}'
                       .format(current_epoch, current_step, discriminator_loss, generator_loss))
+            if current_step % save_interval == 0:
                 if save_model:
                     saver.save(sess=session,
                                save_path=os.path.join(save_model_to, model_name),
@@ -644,9 +660,9 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--epochs', type=int, dest='epochs',
                         help='Specify number of epochs to train. You mush specify'
                              'this argument as it does not have a default.')
-    parser.add_argument('-v', '-verb-interval', type=int, default=1000, dest='verbose_interval',
+    parser.add_argument('-v', '--verb-interval', type=int, default=20, dest='verbose_interval',
                         help='Specify number of steps to print a message')
-    parser.add_argument('-b', '--batch-size', type=int, default=20, dest='batch_size',
+    parser.add_argument('-b', '--batch-size', type=int, default=10, dest='batch_size',
                         help='Set batch size')
     parser.add_argument('--height', type=int, default=256, dest='height',
                         help='Set imported image height')
@@ -671,6 +687,7 @@ if __name__ == '__main__':
                         help='Name to save trained models as.')
     parser.add_argument('--test-size', type=float, default=0.1, dest='test_size',
                         help='Test size')
+    parser.add_argument('--save-interval', type=float, default=500, dest='save_interval')
 
     noise_group = parser.add_mutually_exclusive_group()
     noise_group.add_argument('--add-noise', action='store_true', dest='noise')
@@ -700,4 +717,5 @@ if __name__ == '__main__':
                     noise=args.noise,
                     z_dim=args.z_dim,
                     sigmoid_weight=args.sigmoid_weight,
-                    l1_weight=args.l1_weight)
+                    l1_weight=args.l1_weight,
+                    save_interval=args.save_interval)
