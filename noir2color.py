@@ -264,6 +264,7 @@ def process_data(color_folder, bw_folder, test_size=0.1):
 
     total_samples = len(img_list)
     total_test_size = int(test_size * total_samples)
+    train_size = total_samples - total_test_size
 
     # List of image file names.
     colored_images = tf.convert_to_tensor(img_list, dtype=tf.string)
@@ -280,7 +281,7 @@ def process_data(color_folder, bw_folder, test_size=0.1):
         tf.dynamic_partition(data=bw_images, partitions=partition, num_partitions=2)
 
     return {'train': (train_bw_images, train_colored_images),
-            'test': (test_bw_images, test_colored_images)}
+            'test': (test_bw_images, test_colored_images)}, train_size
 
 
 def input_pipeline(images_tuple, epochs, dim=(256, 256), batch_size=50):
@@ -308,7 +309,7 @@ def input_pipeline(images_tuple, epochs, dim=(256, 256), batch_size=50):
             Two tensors, black-and-white and colored images read from the files.
         """
 
-        def scale(img, target_range=(-1, 1)):
+        def scale(img, target_range=(-1, 1), img_range=(0, 255)):
             """Scale the image from range 0 to 255 to a specified range.
 
             X_scaled = (X - X.min) / (X.max - X.min)
@@ -317,6 +318,7 @@ def input_pipeline(images_tuple, epochs, dim=(256, 256), batch_size=50):
             Args:
                 img: Input tensor.
                 target_range: The min max range to scale the matrix to.
+                img_range: Original range of the image.
 
             Returns:
                 Scaled image.
@@ -325,8 +327,12 @@ def input_pipeline(images_tuple, epochs, dim=(256, 256), batch_size=50):
             target_min = tf.cast(target_min, tf.float32)
             target_max = tf.cast(target_max, tf.float32)
 
-            img_min = tf.fill(value=tf.reduce_min(img), dims=img.get_shape())
-            img_max = tf.fill(value=tf.reduce_max(img), dims=img.get_shape())
+            observed_min, observed_max = img_range
+            observed_min = tf.cast(observed_min, tf.float32)
+            observed_max = tf.cast(observed_max, tf.float32)
+
+            img_min = tf.fill(value=observed_min, dims=img.get_shape())
+            img_max = tf.fill(value=observed_max, dims=img.get_shape())
 
             img_scaled = tf.div(
                 tf.subtract(img, img_min),
@@ -404,7 +410,13 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
 
         conv_out = joint_x
         for layer_i, layer in enumerate(conv_layers):
-            conv_out = conv_avg_pool(conv_out, *layer, name='disc_conv_{}'.format(layer_i))
+            conv_out = conv_avg_pool(conv_out,
+                                     conv_ksize=layer[0],
+                                     conv_stride=layer[1],
+                                     out_channels=layer[2],
+                                     pool_ksize=layer[3],
+                                     pool_stride=layer[4],
+                                     name='disc_conv_{}'.format(layer_i))
 
         flat = flatten(conv_out)
         fc_layers = [
@@ -495,7 +507,7 @@ def generator(input_x, noise=True, z_dim=1, name='generator',
 def build_and_train(epochs,
                     verbose_interval=5,
                     save_interval=500,
-                    batch_size=10,
+                    batch_size=32,
                     image_size=(256, 256),
                     save_model=True,
                     discriminator_scope='discriminator',
@@ -504,7 +516,7 @@ def build_and_train(epochs,
                     bw_folder='img_bw',
                     save_model_to='saved_model',
                     model_name='trained_model',
-                    test_size=0.1,
+                    test_size=0.05,
                     noise=False,
                     z_dim=1,
                     sigmoid_weight=1.0,
@@ -542,9 +554,10 @@ def build_and_train(epochs,
     tf.reset_default_graph()
 
     # Start input pipeline
-    input_files = process_data(color_folder=colored_folder,
-                               bw_folder=bw_folder,
-                               test_size=test_size, )
+    input_files, dataset_size = process_data(color_folder=colored_folder,
+                                             bw_folder=bw_folder,
+                                             test_size=test_size)
+
     train_data = input_files['train']  # train_data is a tuple
     bw_batch, color_batch = input_pipeline(train_data,
                                            dim=image_size,
@@ -594,16 +607,24 @@ def build_and_train(epochs,
     global_step = tf.Variable(0, trainable=False)
 
     # Define optimizers
-    optimizer_disc = \
-        tf.train.AdamOptimizer(learning_rate=disc_lr).minimize(loss_disc,
-                                                               var_list=vars_disc,
-                                                               global_step=global_step)
-    optimizer_gen = \
-        tf.train.AdamOptimizer(learning_rate=gen_lr).minimize(loss_gen,
-                                                              var_list=vars_gen,
-                                                              global_step=global_step)
+    # optimizer_disc = tf.train.AdamOptimizer(learning_rate=disc_lr)
+    # train_disc = optimizer_disc.minimize(loss_disc,
+    #                                      var_list=vars_disc,
+    #                                      global_step=global_step)
+    #
+    # optimizer_gen = tf.train.AdamOptimizer(learning_rate=gen_lr)
+    # train_gen = optimizer_gen.minimize(loss_gen,
+    #                                    var_list=vars_gen,
+    #                                    global_step=global_step)
 
-    dataset_size = bw_batch.get_shape().as_list()[0]
+    optimizer_disc = tf.train.AdamOptimizer(learning_rate=disc_lr)
+    grad_var_disc = optimizer_disc.compute_gradients(loss_disc, var_list=vars_disc)
+    train_disc = optimizer_disc.apply_gradients(grad_var_disc, global_step=global_step)
+
+    optimizer_gen = tf.train.AdamOptimizer(learning_rate=gen_lr)
+    grad_var_gen = optimizer_gen.compute_gradients(loss_gen, var_list=vars_gen)
+    train_gen = optimizer_gen.apply_gradients(grad_var_gen, global_step=global_step)
+
     n_batches = tf.floordiv(dataset_size, batch_size)  # Number of batches in the entire set
     # Number of epochs can be calculated from global_step // n_batches
 
@@ -618,27 +639,35 @@ def build_and_train(epochs,
 
     saver = tf.train.Saver(max_to_keep=3)
 
+    info = {
+        # Contains information about the each training step
+        'disc_nan': tf.is_nan(loss_disc),
+        'gen_nan': tf.is_nan(loss_gen),
+        'current_epoch': tf.floordiv(global_step, n_batches),
+        'current_step': global_step,
+    }
+
     try:
         while not coord.should_stop():
-            _, __, discriminator_loss, generator_loss, current_epoch, current_step = \
+            _, __, discriminator_loss, generator_loss, train_info = \
                 session.run([
-                    optimizer_disc,
-                    optimizer_gen,
+                    train_disc,
+                    train_gen,
                     loss_disc,
                     loss_gen,
-                    tf.floordiv(global_step, n_batches),
-                    global_step
+                    info
                 ])
 
-            if discriminator_loss == np.nan or generator_loss == np.nan:
+            if train_info['disc_nan'] or train_info['gen_nan']:
                 print('Training ended with an error at epoch {} batch {}'
-                      .format(current_epoch, current_step))
-            if current_epoch > epochs:
+                      .format(train_info['current_epoch'], train_info['current_step']))
+                coord.request_stop()
                 break
-            if current_step % verbose_interval == 0:
-                print('Current epoch {}, current step{}, discriminator loss {}, generator loss {}'
-                      .format(current_epoch, current_step, discriminator_loss, generator_loss))
-            if current_step % save_interval == 0:
+            if train_info['current_step'] % verbose_interval == 0:
+                print('Current epoch {}, current step {}, discriminator loss {}, generator loss {}'
+                      .format(train_info['current_epoch'], train_info['current_step'],
+                              discriminator_loss, generator_loss))
+            if train_info['current_step'] % save_interval == 0:
                 if save_model:
                     saver.save(sess=session,
                                save_path=os.path.join(save_model_to, model_name),
@@ -666,7 +695,7 @@ if __name__ == '__main__':
                              'this argument as it does not have a default.')
     parser.add_argument('-v', '--verb-interval', type=int, default=20, dest='verbose_interval',
                         help='Specify number of steps to print a message')
-    parser.add_argument('-b', '--batch-size', type=int, default=10, dest='batch_size',
+    parser.add_argument('-b', '--batch-size', type=int, default=16, dest='batch_size',
                         help='Set batch size')
     parser.add_argument('--height', type=int, default=256, dest='height',
                         help='Set imported image height')
@@ -689,7 +718,7 @@ if __name__ == '__main__':
                         help='Directory to save trained models.')
     parser.add_argument('--model-name', type=str, default='trained_model', dest='model_name',
                         help='Name to save trained models as.')
-    parser.add_argument('--test-size', type=float, default=0.1, dest='test_size',
+    parser.add_argument('--test-size', type=float, default=0.05, dest='test_size',
                         help='Test size')
     parser.add_argument('--save-interval', type=float, default=500, dest='save_interval')
 
