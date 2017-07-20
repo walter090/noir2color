@@ -103,7 +103,11 @@ def flatten(x):
     return tf.reshape(x, shape=[-1, np.prod(x.get_shape().as_list()[1:])])
 
 
-def fully_conn(x, num_output, name='fc', activation='lrelu'):
+def fully_conn(x,
+               num_output,
+               name='fc',
+               activation='lrelu',
+               keep_prob=1.):
     """Fully connected layer, this is is last parts of convnet.
     Fully connect layer requires each image in the batch be flattened.
 
@@ -113,6 +117,8 @@ def fully_conn(x, num_output, name='fc', activation='lrelu'):
         name: Name for the fully connected layer variable scope.
         activation: Set to True to add a leaky relu after fully connected
             layer. Set this argument to False if this is the final layer.
+        keep_prob: Keep probability for dropout layers, if keep probability is 1
+            there is no dropout. Defaults 1.s
 
     Returns:
         Output tensor.
@@ -124,6 +130,7 @@ def fully_conn(x, num_output, name='fc', activation='lrelu'):
                                  initializer=tf.zeros_initializer())
 
         output = tf.nn.bias_add(tf.matmul(x, weights), biases)
+        output = tf.nn.dropout(output, keep_prob=keep_prob)
 
         if activation == 'sigmoid':
             output = tf.sigmoid(output)
@@ -380,7 +387,11 @@ def input_pipeline(images_tuple, epochs, dim=(256, 256), batch_size=50):
     return bw_batch, colored_batch
 
 
-def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
+def discriminator(input_x,
+                  base_x,
+                  keep_prob=1,
+                  reuse_variables=False,
+                  name='discriminator'):
     """Builds the discriminator part of the GAN.
 
     The discriminator takes two inputs, input_x, and base_x; input_x is the image
@@ -390,6 +401,8 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
     Args:
         input_x: Candidate image to be judged by the discriminator.
         base_x: BW image the judgement is based on.
+        keep_prob: Keep probability for dropout layers, if keep probability is 1
+            there is no dropout. Defaults 1.
         reuse_variables: Set to True to reuse variables.
         name: Variable scope name.
 
@@ -420,7 +433,7 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
 
         flat = flatten(conv_out)
         fc_layers = [
-            # num_output, activation
+            # num_output, activation, keep_prob
             [1024, 'lrelu'],
             [1, None],
         ]
@@ -430,6 +443,7 @@ def discriminator(input_x, base_x, reuse_variables=False, name='discriminator'):
             output = fully_conn(output,
                                 num_output=layer[0],
                                 activation=layer[1],
+                                keep_prob=keep_prob,
                                 name='disc_fc_{}'.format(layer_i))
 
         return output, tf.nn.sigmoid(output)
@@ -441,7 +455,7 @@ def generator(input_x, noise=True, z_dim=1, name='generator',
 
     Args:
         input_x: Input image
-        noise: Set True to add noise to input
+        noise: Set True to add noise to input. Turn off during testing.
         z_dim: Noise dimension
         name: Variable scope name
         conv_layers: A list of lists specifying parameters for each conv layer.
@@ -462,6 +476,7 @@ def generator(input_x, noise=True, z_dim=1, name='generator',
         if conv_layers is None:
             conv_layers = [
                 # filter size, stride, output channels
+                [(4, 4), (2, 2), 32],
                 [(4, 4), (2, 2), 64],
                 [(4, 4), (2, 2), 128],
                 [(4, 4), (2, 2), 256],
@@ -488,6 +503,7 @@ def generator(input_x, noise=True, z_dim=1, name='generator',
                 [(4, 4), (2, 2), 512],
                 [(4, 4), (2, 2), 256],
                 [(4, 4), (2, 2), 128],
+                [(4, 4), (2, 2), 64],
                 [(4, 4), (2, 2), 3],
             ]
 
@@ -520,10 +536,11 @@ def build_and_train(epochs,
                     noise=False,
                     z_dim=1,
                     sigmoid_weight=1.0,
-                    l1_weight=0.5,
+                    l1_weight=1,
                     epsilon=10e-12,
-                    disc_lr=10e-10,
-                    gen_lr=10e-11):
+                    disc_lr=10e-6,
+                    gen_lr=10e-6,
+                    keep_prob=1):
     """Build and train the graph
 
     Args:
@@ -547,6 +564,7 @@ def build_and_train(epochs,
         epsilon: Fuzzy factor for loss functions.
         disc_lr: Learning rate for discriminator optimizer.
         gen_lr: Learning rate for generator optimizer.
+        keep_prob: Keep probability for dropout in discriminator.
 
     Returns:
         None
@@ -569,36 +587,26 @@ def build_and_train(epochs,
     # Discriminator probability for real images
     logits_real, real_prob = discriminator(input_x=color_batch,
                                            base_x=bw_batch,
+                                           keep_prob=keep_prob,
                                            name=discriminator_scope)
     # Discriminator probability for fake images
     logits_fake, fake_prob = discriminator(input_x=generated,
                                            base_x=bw_batch,
+                                           keep_prob=keep_prob,
                                            name=discriminator_scope,
                                            reuse_variables=True)
 
-    real_epsilon = tf.fill(dims=logits_real.get_shape(), value=epsilon)
-    fake_epsilon = tf.fill(dims=logits_fake.get_shape(), value=epsilon)
-    fake_epsilon_gen = tf.fill(dims=generated.get_shape(), value=epsilon)
+    loss_disc = tf.reduce_mean(
+        - (tf.log(real_prob) + tf.log(1 - fake_prob + epsilon))
+    )
 
-    loss_disc_real = tf.reduce_mean(
-        # Maximize the likelihood of real images
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_real + real_epsilon,
-                                                labels=tf.ones_like(logits_real))
-    )
-    loss_disc_fake = tf.reduce_mean(
-        # Minimize the likelihood of generated images.
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake + fake_epsilon,
-                                                labels=tf.zeros_like(logits_fake))
-    )
-    loss_disc = loss_disc_fake + loss_disc_real
-    loss_gen_sigmoid = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake + fake_epsilon,
-                                                labels=tf.ones_like(logits_fake))
+    loss_gen_gan = tf.reduce_mean(
+        - tf.log(fake_prob + epsilon)
     )
     loss_gen_l1 = tf.reduce_mean(
-        tf.abs(generated - color_batch) + fake_epsilon_gen
+        tf.abs(generated - color_batch)
     )
-    loss_gen = loss_gen_sigmoid * sigmoid_weight + loss_gen_l1 * l1_weight
+    loss_gen = loss_gen_gan * sigmoid_weight + loss_gen_l1 * l1_weight
 
     all_vars = tf.trainable_variables()
     vars_disc = [var for var in all_vars if var.name.startswith(discriminator_scope)]
@@ -606,24 +614,11 @@ def build_and_train(epochs,
 
     global_step = tf.Variable(0, trainable=False)
 
-    # Define optimizers
-    # optimizer_disc = tf.train.AdamOptimizer(learning_rate=disc_lr)
-    # train_disc = optimizer_disc.minimize(loss_disc,
-    #                                      var_list=vars_disc,
-    #                                      global_step=global_step)
-    #
-    # optimizer_gen = tf.train.AdamOptimizer(learning_rate=gen_lr)
-    # train_gen = optimizer_gen.minimize(loss_gen,
-    #                                    var_list=vars_gen,
-    #                                    global_step=global_step)
-
     optimizer_disc = tf.train.AdamOptimizer(learning_rate=disc_lr)
-    grad_var_disc = optimizer_disc.compute_gradients(loss_disc, var_list=vars_disc)
-    train_disc = optimizer_disc.apply_gradients(grad_var_disc, global_step=global_step)
+    train_disc = optimizer_disc.minimize(loss_disc, var_list=vars_disc, global_step=global_step)
 
     optimizer_gen = tf.train.AdamOptimizer(learning_rate=gen_lr)
-    grad_var_gen = optimizer_gen.compute_gradients(loss_gen, var_list=vars_gen)
-    train_gen = optimizer_gen.apply_gradients(grad_var_gen, global_step=global_step)
+    train_gen = optimizer_gen.minimize(loss_gen, var_list=vars_gen, global_step=global_step)
 
     n_batches = tf.floordiv(dataset_size, batch_size)  # Number of batches in the entire set
     # Number of epochs can be calculated from global_step // n_batches
@@ -637,7 +632,7 @@ def build_and_train(epochs,
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord, sess=session)
 
-    saver = tf.train.Saver(max_to_keep=3)
+    saver = tf.train.Saver(max_to_keep=1)
 
     info = {
         # Contains information about the each training step
@@ -682,9 +677,8 @@ def build_and_train(epochs,
     session.close()
 
 
-def model_test(saved_model):
+def model_test(saved_meta):
     raise NotImplementedError
-
 
 if __name__ == '__main__':
     import argparse
@@ -703,8 +697,10 @@ if __name__ == '__main__':
                         help='Set imported image width')
 
     save_model_group = parser.add_mutually_exclusive_group()
-    save_model_group.add_argument('-s', '--save-model', action='store_true', dest='save_model')
-    save_model_group.add_argument('--no-save-model', action='store_false', dest='save_model')
+    save_model_group.add_argument('-s', '--save-model', action='store_true', dest='save_model',
+                                  help='Use this flag to save model after training.')
+    save_model_group.add_argument('--no-save-model', action='store_false', dest='save_model',
+                                  help='Use this flag to skip saving the model after training.')
 
     parser.add_argument('--disc-name', type=str, default='discriminator', dest='discriminator_scope',
                         help='Specify discriminator variable scope name.')
@@ -720,23 +716,30 @@ if __name__ == '__main__':
                         help='Name to save trained models as.')
     parser.add_argument('--test-size', type=float, default=0.05, dest='test_size',
                         help='Test size')
-    parser.add_argument('--save-interval', type=float, default=500, dest='save_interval')
+    parser.add_argument('--save-interval', type=float, default=500, dest='save_interval',
+                        help='Intervals between training steps to save the latest model.')
 
     noise_group = parser.add_mutually_exclusive_group()
-    noise_group.add_argument('--add-noise', action='store_true', dest='noise')
-    noise_group.add_argument('--no-noise', action='store_false', dest='noise')
+    noise_group.add_argument('--add-noise', action='store_true', dest='noise',
+                             help='Add noise to input image.')
+    noise_group.add_argument('--no-noise', action='store_false', dest='noise',
+                             help='Do not add noise to input image.')
 
-    parser.add_argument('--z-dim', type=float, default=1, dest='z_dim',
+    parser.add_argument('--z-dim', type=int, default=1, dest='z_dim',
                         help='Noise dimension')
     parser.add_argument('--sigmoid-weight', type=float, default=1.0, dest='sigmoid_weight',
                         help='Weight for sigmoid cross entropy loss.')
-    parser.add_argument('--l1-weight', type=float, default=0.5, dest='l1_weight',
+    parser.add_argument('--l1-weight', type=float, default=1.0, dest='l1_weight',
                         help='Weight for l1 loss.')
     parser.add_argument('--epsilon', type=float, default=10e-12, dest='epsilon')
-    parser.add_argument('--disc-lr', type=float, default=10e-10, dest='disc_lr',
+    parser.add_argument('--disc-lr', type=float, default=10e-11, dest='disc_lr',
                         help='Learning rate for discriminator optimizer.')
     parser.add_argument('--gen-lr', type=float, default=10e-11, dest='gen_lr',
                         help='Learning rate for generator optimizer.')
+    parser.add_argument('--keep-prob', type=float, default=1., dest='keep_prob',
+                        help='Keep probability for dropout in discriminator.')
+
+    parser.set_defaults(noise=False, save_model=True)
 
     args = parser.parse_args()
 
@@ -759,4 +762,5 @@ if __name__ == '__main__':
                     save_interval=args.save_interval,
                     epsilon=args.epsilon,
                     disc_lr=args.disc_lr,
-                    gen_lr=args.gen_lr)
+                    gen_lr=args.gen_lr,
+                    keep_prob=args.keep_prob)
