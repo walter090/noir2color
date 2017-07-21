@@ -58,10 +58,10 @@ def load_image(image_file, output_size=(256, 256)):
     img = Image.open(image_file)
     img = crop(img)
     img.load()
-    img_as_list = np.asarray(img, dtype='int32').astype('uint8')
+    img_as_list = np.asarray(img, dtype='int32').astype(np.uint8)
 
     resized_img = resize(img_as_list, output_size, mode='wrap')
-    return resized_img
+    return (resized_img * 255).astype(np.float32)
 
 
 def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256)):
