@@ -291,6 +291,45 @@ def process_data(color_folder, bw_folder, test_size=0.1):
             'test': (test_bw_images, test_colored_images)}, train_size
 
 
+def scale(img, target_range=(-1, 1), img_range=(0, 255)):
+    """Scale the image from range 0 to 255 to a specified range.
+
+    X_scaled = (X - X.min) / (X.max - X.min)
+    X_scaled = X_scaled * (max - min) + min
+
+    Args:
+        img: Input tensor.
+        target_range: The min max range to scale the matrix to.
+        img_range: Original range of the image.
+
+    Returns:
+        Scaled image.
+    """
+    target_min, target_max = target_range
+    target_min = tf.cast(target_min, tf.float32)
+    target_max = tf.cast(target_max, tf.float32)
+
+    observed_min, observed_max = img_range
+    observed_min = tf.cast(observed_min, tf.float32)
+    observed_max = tf.cast(observed_max, tf.float32)
+
+    img_min = tf.fill(value=observed_min, dims=img.get_shape())
+    img_max = tf.fill(value=observed_max, dims=img.get_shape())
+
+    img_scaled = tf.div(
+        tf.subtract(img, img_min),
+        tf.subtract(img_max, img_min)
+    )
+    img_scaled = tf.add(
+        target_min,
+        tf.multiply(
+            img_scaled,
+            tf.subtract(target_max, target_min)
+        )
+    )
+    return img_scaled
+
+
 def input_pipeline(images_tuple, epochs, dim=(256, 256), batch_size=50):
     """Pipeline for inputting images.
 
@@ -315,44 +354,6 @@ def input_pipeline(images_tuple, epochs, dim=(256, 256), batch_size=50):
         Returns:
             Two tensors, black-and-white and colored images read from the files.
         """
-
-        def scale(img, target_range=(-1, 1), img_range=(0, 255)):
-            """Scale the image from range 0 to 255 to a specified range.
-
-            X_scaled = (X - X.min) / (X.max - X.min)
-            X_scaled = X_scaled * (max - min) + min
-
-            Args:
-                img: Input tensor.
-                target_range: The min max range to scale the matrix to.
-                img_range: Original range of the image.
-
-            Returns:
-                Scaled image.
-            """
-            target_min, target_max = target_range
-            target_min = tf.cast(target_min, tf.float32)
-            target_max = tf.cast(target_max, tf.float32)
-
-            observed_min, observed_max = img_range
-            observed_min = tf.cast(observed_min, tf.float32)
-            observed_max = tf.cast(observed_max, tf.float32)
-
-            img_min = tf.fill(value=observed_min, dims=img.get_shape())
-            img_max = tf.fill(value=observed_max, dims=img.get_shape())
-
-            img_scaled = tf.div(
-                tf.subtract(img, img_min),
-                tf.subtract(img_max, img_min)
-            )
-            img_scaled = tf.add(
-                target_min,
-                tf.multiply(
-                    img_scaled,
-                    tf.subtract(target_max, target_min)
-                )
-            )
-            return img_scaled
 
         bw_img_file = tf.read_file(input_queue_[0])
         colored_img_file = tf.read_file(input_queue_[1])
@@ -449,7 +450,7 @@ def discriminator(input_x,
         return output, tf.nn.sigmoid(output)
 
 
-def generator(input_x, noise=True, z_dim=1, name='generator',
+def generator(input_x, noise=False, z_dim=1, name='generator',
               conv_layers=None, deconv_layers=None, batchnorm=True):
     """Generator network
 
@@ -638,7 +639,7 @@ def build_and_train(epochs,
         # Contains information about the each training step
         'disc_nan': tf.is_nan(loss_disc),
         'gen_nan': tf.is_nan(loss_gen),
-        'current_epoch': tf.floordiv(global_step, n_batches),
+        'current_epoch': tf.floordiv(tf.div(global_step, 2), n_batches),
         'current_step': global_step,
     }
 
@@ -665,7 +666,7 @@ def build_and_train(epochs,
             if train_info['current_step'] % save_interval == 0:
                 if save_model:
                     saver.save(sess=session,
-                               save_path=os.path.join(save_model_to, model_name),
+                               save_path=os.path.join(save_model_to, model_name + '.ckpt'),
                                global_step=global_step)
 
     except tf.errors.OutOfRangeError:
@@ -677,8 +678,23 @@ def build_and_train(epochs,
     session.close()
 
 
-def model_test(saved_meta):
-    raise NotImplementedError
+# def model_test(meta, meta_file, input_image):
+#     tf.reset_default_graph()
+#     session = tf.Session()
+#
+#     shape = input_image.shape
+#     size = 4 if len(shape) == 4 else 1
+#
+#     saver = tf.train.import_meta_graph(meta_file)
+#     saver.restore(session, meta)
+#
+#     base_img = tf.cast(tf.convert_to_tensor(input_image), dtype=tf.float32)
+#     base_img = scale(base_img)
+#     base_img = tf.reshape(base_img, [size, *shape, 1])
+#
+#     session.run(generator(input_x=base_img))
+#
+#     session.close()
 
 if __name__ == '__main__':
     import argparse
