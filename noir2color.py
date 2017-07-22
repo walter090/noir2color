@@ -391,7 +391,7 @@ def input_pipeline(images_tuple, epochs, dim=(256, 256), batch_size=50):
 def discriminator(input_x,
                   base_x,
                   keep_prob=1,
-                  reuse_variables=False,
+                  reuse_variables=None,
                   name='discriminator'):
     """Builds the discriminator part of the GAN.
 
@@ -450,8 +450,13 @@ def discriminator(input_x,
         return output, tf.nn.sigmoid(output)
 
 
-def generator(input_x, noise=False, z_dim=1, name='generator',
-              conv_layers=None, deconv_layers=None, batchnorm=True):
+def generator(input_x,
+              noise=False,
+              z_dim=1,
+              name='generator',
+              conv_layers=None,
+              deconv_layers=None,
+              batchnorm=True):
     """Generator network
 
     Args:
@@ -472,7 +477,10 @@ def generator(input_x, noise=False, z_dim=1, name='generator',
         if noise:
             input_z = tf.random_normal(shape=input_x.get_shape().as_list()[: 3] + [z_dim],
                                        stddev=0.02, dtype=tf.float32)
-            input_x = tf.concat([input_x, input_z], axis=3)
+        else:
+            input_z = tf.zeros(shape=input_x.get_shape().as_list()[: 3] + [z_dim],
+                               dtype=tf.float32)
+        input_x = tf.concat([input_x, input_z], axis=3)
 
         if conv_layers is None:
             conv_layers = [
@@ -633,7 +641,7 @@ def build_and_train(epochs,
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord, sess=session)
 
-    saver = tf.train.Saver(max_to_keep=1)
+    saver = tf.train.Saver(var_list=vars_gen, max_to_keep=1)
 
     info = {
         # Contains information about the each training step
@@ -666,7 +674,7 @@ def build_and_train(epochs,
             if train_info['current_step'] % save_interval == 0:
                 if save_model:
                     saver.save(sess=session,
-                               save_path=os.path.join(save_model_to, model_name + '.ckpt'),
+                               save_path=os.path.join(save_model_to, model_name),
                                global_step=global_step)
 
     except tf.errors.OutOfRangeError:
@@ -677,24 +685,6 @@ def build_and_train(epochs,
     coord.join(threads)
     session.close()
 
-
-# def model_test(meta, meta_file, input_image):
-#     tf.reset_default_graph()
-#     session = tf.Session()
-#
-#     shape = input_image.shape
-#     size = 4 if len(shape) == 4 else 1
-#
-#     saver = tf.train.import_meta_graph(meta_file)
-#     saver.restore(session, meta)
-#
-#     base_img = tf.cast(tf.convert_to_tensor(input_image), dtype=tf.float32)
-#     base_img = scale(base_img)
-#     base_img = tf.reshape(base_img, [size, *shape, 1])
-#
-#     session.run(generator(input_x=base_img))
-#
-#     session.close()
 
 if __name__ == '__main__':
     import argparse
