@@ -64,15 +64,16 @@ def load_image(image_file, output_size=(256, 256)):
     return resized_img
 
 
-def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256)):
+def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256), interval=100):
     """Convert jpg files to numpy array.
     Save images as jpeg to disk.
 
     Args:
-        folder(str): Folder where images are stores.
-        dest(str): Destination of converted csv files.
-        bw_dest(str): Destination for black and white images.
-        size(tuple): Size of the output.
+        folder: Folder where images are stores.
+        dest: Destination of converted csv files.
+        bw_dest: Destination for black and white images.
+        size: Size of the output.
+        interval: Verbose interval
 
     Returns:
         None
@@ -84,8 +85,7 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256)):
         os.mkdir(bw_dest)
 
     # Auto incremental id for images
-    img_id = 0
-    for img in img_list:
+    for index, img in enumerate(img_list):
         try:
             img_asarray = load_image(os.path.join(folder, img), size)
             img_flat = np.reshape(img_asarray, -1)
@@ -99,10 +99,14 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256)):
         img_bw = color2bw(img_asarray)
 
         extension = '.jpg'
-        scipy.misc.toimage(img_asarray).save(os.path.join(dest, str(img_id)) + extension)
-        scipy.misc.toimage(img_bw).save(os.path.join(bw_dest, str(img_id)) + extension)
+        scipy.misc.toimage(img_asarray).save(os.path.join(dest, str(index)) + extension)
+        scipy.misc.toimage(img_bw).save(os.path.join(bw_dest, str(index)) + extension)
 
-        img_id += 1
+        print('Converting images')
+        if index % interval == 0:
+            print('.', end='')
+
+    print('Conversion complete')
 
 
 def scale(img, original_range=(0, 255), target_range=(-1, 1)):
