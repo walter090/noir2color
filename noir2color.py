@@ -724,8 +724,8 @@ def build_and_train(epochs,
     session.close()
 
     # Output test data as a pickle
-    # with open('test_data.pickle', 'wb') as dumper:
-    #     pickle.dump(test_data, dumper)
+    with open('test_data.pickle', 'wb') as dumper:
+        pickle.dump(test_data, dumper)
 
 
 if __name__ == '__main__':
