@@ -47,7 +47,8 @@ def conv_avg_pool(x,
 
         conv_stride = [1, *conv_stride, 1]
 
-        convoluted = tf.nn.conv2d(x, filter=weights, strides=conv_stride, padding=padding)
+        convoluted = tf.nn.conv2d(x, filter=weights,
+                                  strides=conv_stride, padding=padding)
         convoluted = tf.nn.bias_add(convoluted, bias)
 
         if batchnorm:
@@ -58,7 +59,8 @@ def conv_avg_pool(x,
         if pool_ksize is not None and pool_stride is not None:
             pool_ksize = (1,) + pool_ksize + (1,)
             pool_stride = (1,) + pool_stride + (1,)
-            conv = tf.nn.avg_pool(conv, ksize=pool_ksize, strides=pool_stride, padding=padding)
+            conv = tf.nn.avg_pool(conv, ksize=pool_ksize,
+                                  strides=pool_stride, padding=padding)
         return conv
 
 
@@ -125,9 +127,11 @@ def fully_conn(x,
         Output tensor.
     """
     with tf.variable_scope(name):
-        weights = tf.get_variable(name='fc_w', shape=[x.get_shape().as_list()[-1], num_output],
+        weights = tf.get_variable(name='fc_w',
+                                  shape=[x.get_shape().as_list()[-1], num_output],
                                   initializer=tf.random_normal_initializer(stddev=0.02))
-        biases = tf.get_variable(name='fc_b', shape=[num_output],
+        biases = tf.get_variable(name='fc_b',
+                                 shape=[num_output],
                                  initializer=tf.zeros_initializer())
 
         output = tf.nn.bias_add(tf.matmul(x, weights), biases)
@@ -204,8 +208,10 @@ def deconv(x,
                                  "default padding")
 
         deconvolved = tf.nn.conv2d_transpose(x,
-                                             filter=weights, output_shape=output_shape,
-                                             strides=stride, padding=padding)
+                                             filter=weights,
+                                             output_shape=output_shape,
+                                             strides=stride,
+                                             padding=padding)
         deconv_out = tf.nn.bias_add(deconvolved, biases)
 
         if batchnorm:
@@ -230,9 +236,11 @@ def batch_normalize(x, epsilon=1e-5):
     with tf.variable_scope('batch_norm'):
         mean, variance = tf.nn.moments(x, axes=[0, 1, 2])
 
-        scale = tf.get_variable('bn_scale', shape=[x.get_shape().as_list()[-1]],
+        scale = tf.get_variable('bn_scale',
+                                shape=[x.get_shape().as_list()[-1]],
                                 initializer=tf.random_normal_initializer())
-        offset = tf.get_variable('bn_bias', shape=[x.get_shape().as_list()[-1]],
+        offset = tf.get_variable('bn_bias',
+                                 shape=[x.get_shape().as_list()[-1]],
                                  initializer=tf.zeros_initializer())
         normalized = tf.nn.batch_normalization(x=x,
                                                mean=mean,
@@ -259,8 +267,10 @@ def process_data(color_folder, bw_folder, test_size=0.1):
     def file_sort(file_name):
         return int(file_name.split('.')[0])
 
-    img_list = [img for img in os.listdir(color_folder) if not img.split('.')[0] == '']
-    bw_img_list = [img for img in os.listdir(bw_folder) if not img.split('.')[0] == '']
+    img_list = [img for img in os.listdir(color_folder)
+                if not img.split('.')[0] == '']
+    bw_img_list = [img for img in os.listdir(bw_folder)
+                   if not img.split('.')[0] == '']
 
     img_list = sorted(img_list, key=file_sort)
     bw_img_list = sorted(bw_img_list, key=file_sort)
@@ -284,9 +294,13 @@ def process_data(color_folder, bw_folder, test_size=0.1):
     shuffle(partition)
 
     train_colored_images, test_colored_images = \
-        tf.dynamic_partition(data=colored_images, partitions=partition, num_partitions=2)
+        tf.dynamic_partition(data=colored_images,
+                             partitions=partition,
+                             num_partitions=2)
     train_bw_images, test_bw_images = \
-        tf.dynamic_partition(data=bw_images, partitions=partition, num_partitions=2)
+        tf.dynamic_partition(data=bw_images,
+                             partitions=partition,
+                             num_partitions=2)
 
     return {'train': (train_bw_images, train_colored_images),
             'test': (test_bw_images, test_colored_images)}, train_size
@@ -378,7 +392,8 @@ def input_pipeline(images_tuple, epochs, dim=(256, 256), batch_size=50):
     bw_images, colored_images = images_tuple
 
     # Create an input queue, a queue of string tensors that are image file names.
-    input_queue = tf.train.slice_input_producer([bw_images, colored_images], num_epochs=epochs)
+    input_queue = tf.train.slice_input_producer([bw_images, colored_images],
+                                                num_epochs=epochs)
 
     bw_img, colored_img = read_image(input_queue)
     bw_batch, colored_batch = tf.train.batch([bw_img, colored_img],
@@ -412,7 +427,7 @@ def discriminator(input_x,
         An unscaled value of the discriminator result.
     """
     with tf.variable_scope(name, reuse=reuse_variables):
-        joint_x = tf.concat([input_x, base_x], axis=3)
+        joint_x = tf.concat([base_x, input_x], axis=3)
 
         conv_layers = [
             # Specify each convolution layer parameters
@@ -545,7 +560,7 @@ def build_and_train(epochs,
                     test_size=0.05,
                     noise=False,
                     z_dim=1,
-                    sigmoid_weight=1.0,
+                    adversary_weight=1.0,
                     l1_weight=1,
                     epsilon=10e-12,
                     disc_lr=10e-6,
@@ -569,7 +584,7 @@ def build_and_train(epochs,
         test_size: Split factor for test set, defaults 0.1
         noise: Set to True to add noise to the generator.
         z_dim: Dimension of noise.
-        sigmoid_weight: Weight for sigmoid cross entropy loss.
+        adversary_weight: Weight for sigmoid cross entropy loss.
         l1_weight: Weight for l1 loss.
         epsilon: Fuzzy factor for loss functions.
         disc_lr: Learning rate for discriminator optimizer.
@@ -588,9 +603,6 @@ def build_and_train(epochs,
 
     train_data = input_files['train']  # train_data is a tuple
     test_data = input_files['test']  # test_data as well
-    # Output test data as a pickle
-    with open('test_data.pickle', 'wb') as dumper:
-        pickle.dump(test_data, dumper)
 
     bw_batch, color_batch = input_pipeline(train_data,
                                            dim=image_size,
@@ -598,7 +610,7 @@ def build_and_train(epochs,
                                            epochs=epochs)
 
     # Generated image
-    generated = generator(bw_batch, name=generator_scope, noise=noise, z_dim=z_dim)
+    generated = generator(input_x=bw_batch, name=generator_scope, noise=noise, z_dim=z_dim)
     # Discriminator probability for real images
     logits_real, real_prob = discriminator(input_x=color_batch,
                                            base_x=bw_batch,
@@ -614,14 +626,18 @@ def build_and_train(epochs,
     loss_disc = tf.reduce_mean(
         - (tf.log(real_prob) + tf.log(1 - fake_prob + epsilon))
     )
-
     loss_gen_gan = tf.reduce_mean(
         - tf.log(fake_prob + epsilon)
     )
     loss_gen_l1 = tf.reduce_mean(
         tf.abs(generated - color_batch)
     )
-    loss_gen = loss_gen_gan * sigmoid_weight + loss_gen_l1 * l1_weight
+    loss_gen = loss_gen_gan * adversary_weight + loss_gen_l1 * l1_weight
+
+    tf.summary.scalar('discriminator loss', loss_disc)
+    tf.summary.scalar('adversary loss', loss_gen_gan)
+    tf.summary.scalar('l1 loss', loss_gen_l1)
+    tf.summary.scalar('generator loss', loss_gen)
 
     all_vars = tf.trainable_variables()
     vars_disc = [var for var in all_vars if var.name.startswith(discriminator_scope)]
@@ -630,16 +646,24 @@ def build_and_train(epochs,
     global_step = tf.Variable(0, trainable=False)
 
     optimizer_disc = tf.train.AdamOptimizer(learning_rate=disc_lr)
-    train_disc = optimizer_disc.minimize(loss_disc, var_list=vars_disc, global_step=global_step)
+    train_disc = optimizer_disc.minimize(loss_disc,
+                                         var_list=vars_disc,
+                                         global_step=global_step)
 
     optimizer_gen = tf.train.AdamOptimizer(learning_rate=gen_lr)
-    train_gen = optimizer_gen.minimize(loss_gen, var_list=vars_gen, global_step=global_step)
+    train_gen = optimizer_gen.minimize(loss_gen,
+                                       var_list=vars_gen,
+                                       global_step=global_step)
 
     n_batches = tf.floordiv(dataset_size, batch_size)  # Number of batches in the entire set
     # Number of epochs can be calculated from global_step // n_batches
 
     # Initialize session
     session = tf.Session()
+
+    merged = tf.summary.merge_all()
+    writer = tf.summary.FileWriter(os.path.join('tensorboard', 'training'),
+                                   session.graph)
 
     session.run(tf.global_variables_initializer())
     session.run(tf.local_variables_initializer())
@@ -654,34 +678,42 @@ def build_and_train(epochs,
         'disc_nan': tf.is_nan(loss_disc),
         'gen_nan': tf.is_nan(loss_gen),
         'current_epoch': tf.floordiv(tf.div(global_step, 2), n_batches),
-        'current_step': global_step,
+        'current_step': tf.div(global_step, 2),
+        'test_data': test_data,
     }
+
+    test_data_ens = []
 
     try:
         while not coord.should_stop():
-            _, __, discriminator_loss, generator_loss, train_info = \
+            _, __, discriminator_loss, generator_loss, batch_info, summary = \
                 session.run([
                     train_disc,
                     train_gen,
                     loss_disc,
                     loss_gen,
-                    info
+                    info,
+                    merged,
                 ])
 
-            if train_info['disc_nan'] or train_info['gen_nan']:
+            writer.add_summary(summary, batch_info['current_step'])
+
+            if batch_info['disc_nan'] or batch_info['gen_nan']:
                 print('Training ended with an error at epoch {} batch {}'
-                      .format(train_info['current_epoch'], train_info['current_step']))
+                      .format(batch_info['current_epoch'], batch_info['current_step']))
                 coord.request_stop()
                 break
-            if train_info['current_step'] % verbose_interval == 0:
+            if batch_info['current_step'] % verbose_interval == 0:
                 print('Current epoch {}, current step {}, discriminator loss {}, generator loss {}'
-                      .format(train_info['current_epoch'], train_info['current_step'],
+                      .format(batch_info['current_epoch'], batch_info['current_step'],
                               discriminator_loss, generator_loss))
-            if train_info['current_step'] % save_interval == 0:
+            if batch_info['current_step'] % save_interval == 0:
                 if save_model:
                     saver.save(sess=session,
                                save_path=os.path.join(save_model_to, model_name),
                                global_step=global_step)
+
+            test_data_ens.append(batch_info['test_data'])
 
     except tf.errors.OutOfRangeError:
         print('Training complete.')
@@ -690,6 +722,10 @@ def build_and_train(epochs,
 
     coord.join(threads)
     session.close()
+
+    # Output test data as a pickle
+    # with open('test_data.pickle', 'wb') as dumper:
+    #     pickle.dump(test_data, dumper)
 
 
 if __name__ == '__main__':
@@ -769,7 +805,7 @@ if __name__ == '__main__':
                     test_size=args.test_size,
                     noise=args.noise,
                     z_dim=args.z_dim,
-                    sigmoid_weight=args.sigmoid_weight,
+                    adversary_weight=args.sigmoid_weight,
                     l1_weight=args.l1_weight,
                     save_interval=args.save_interval,
                     epsilon=args.epsilon,
