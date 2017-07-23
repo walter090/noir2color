@@ -3,6 +3,7 @@ from random import shuffle
 
 import numpy as np
 import tensorflow as tf
+import pickle
 
 
 def conv_avg_pool(x,
@@ -435,7 +436,7 @@ def discriminator(input_x,
         flat = flatten(conv_out)
         fc_layers = [
             # num_output, activation, keep_prob
-            [1024, 'lrelu'],
+            [2048, 'lrelu'],
             [1, None],
         ]
 
@@ -586,6 +587,11 @@ def build_and_train(epochs,
                                              test_size=test_size)
 
     train_data = input_files['train']  # train_data is a tuple
+    test_data = input_files['test']  # test_data as well
+    # Output test data as a pickle
+    with open('test_data.pickle', 'wb') as dumper:
+        pickle.dump(test_data, dumper)
+
     bw_batch, color_batch = input_pipeline(train_data,
                                            dim=image_size,
                                            batch_size=batch_size,
