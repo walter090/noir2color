@@ -1,5 +1,6 @@
 import os
 
+import sys
 import numpy as np
 import scipy.misc
 from PIL import Image
@@ -64,6 +65,19 @@ def load_image(image_file, output_size=(256, 256)):
     return resized_img
 
 
+def color2bw(img):
+    """Convert a RGB image to a single channel black and white image
+    Converted image is already scaled to [0, 1] range.
+
+    Args:
+        img(list): 3-D numpy array, RGB image
+
+    Returns:
+        Converted image with gray scale channel
+    """
+    return rgb2gray(img)
+
+
 def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256), interval=100):
     """Convert jpg files to numpy array.
     Save images as jpeg to disk.
@@ -104,7 +118,7 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256), interval=1
 
         print('Converting images')
         if index % interval == 0:
-            print('.', end='')
+            sys.stdout.write('.')
 
     print('Conversion complete')
 
@@ -131,16 +145,3 @@ def scale(img, original_range=(0, 255), target_range=(-1, 1)):
 
     return scaled_img.astype(np.uint8) if target_range == (0, 255)\
         else scaled_img.astype(np.float32)
-
-
-def color2bw(img):
-    """Convert a RGB image to a single channel black and white image
-    Converted image is already scaled to [0, 1] range.
-
-    Args:
-        img(list): 3-D numpy array, RGB image
-
-    Returns:
-        Converted image with gray scale channel
-    """
-    return rgb2gray(img)

@@ -23,7 +23,7 @@ def conv_avg_pool(x,
 
     Args:
         x: Input from the previous layer.
-        conv_ksize: 2-D tuple, filter size.
+        conv_ksize: tuple, filter size.
         conv_stride: Stride for the convolution layer.
         out_channels: Out channels for the convnet.
         pool_ksize: Filter size for the average pooling layer.
@@ -45,7 +45,7 @@ def conv_avg_pool(x,
                                shape=[out_channels],
                                initializer=tf.zeros_initializer())
 
-        conv_stride = [1, *conv_stride, 1]
+        conv_stride = [1, conv_stride[0], conv_stride[1], 1]
 
         convoluted = tf.nn.conv2d(x, filter=weights,
                                   strides=conv_stride, padding=padding)
@@ -180,7 +180,7 @@ def deconv(x,
                                  shape=[out_channels],
                                  initializer=tf.zeros_initializer())
 
-        stride = [1, *stride, 1]
+        stride = [1, stride[0], stride[1], 1]
 
         x_shape = x.get_shape().as_list()
 
@@ -398,8 +398,8 @@ def input_pipeline(images_tuple, epochs, dim=(256, 256), batch_size=50):
     bw_img, colored_img = read_image(input_queue)
     bw_batch, colored_batch = tf.train.batch([bw_img, colored_img],
                                              batch_size=batch_size)
-    bw_batch.set_shape([batch_size, *dim, 1])
-    colored_batch.set_shape([batch_size, *dim, 3])
+    bw_batch.set_shape([batch_size, dim[0], dim[1], 1])
+    colored_batch.set_shape([batch_size, dim[1], dim[1], 3])
 
     return bw_batch, colored_batch
 
