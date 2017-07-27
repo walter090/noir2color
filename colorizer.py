@@ -2,7 +2,7 @@ import tensorflow as tf
 import noir2color
 
 
-def model_test(meta, input_image):
+def model_test(meta, input_image, noise=True, z_dim=100):
     """Use the trained generator
 
     Function for using the trained generator, loads the trained weights and biases
@@ -11,6 +11,8 @@ def model_test(meta, input_image):
     Args:
         meta: string, checkpoint file
         input_image: 2-D or 3-D array, a single or list of input images
+        noise: Set True to add noise to the model
+        z_dim: Depth of the noise.
 
     Returns:
         gen_img: Colorized image(s)
@@ -23,7 +25,7 @@ def model_test(meta, input_image):
         base_img = noir2color.scale(base_img)
         base_img = tf.reshape(base_img, [size, *shape, 1])
 
-        gen_tensor = noir2color.generator(input_x=base_img)
+        gen_tensor = noir2color.generator(input_x=base_img, noise=noise, z_dim=z_dim)
         tf.get_variable_scope().reuse_variables()
 
         saver = tf.train.Saver()
