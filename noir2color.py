@@ -238,7 +238,7 @@ def batch_normalize(x, epsilon=1e-5):
 
         scale = tf.get_variable('bn_scale',
                                 shape=[x.get_shape().as_list()[-1]],
-                                initializer=tf.random_normal_initializer())
+                                initializer=tf.ones_initializer())
         offset = tf.get_variable('bn_bias',
                                  shape=[x.get_shape().as_list()[-1]],
                                  initializer=tf.zeros_initializer())
@@ -451,7 +451,7 @@ def discriminator(input_x,
         flat = flatten(conv_out)
         fc_layers = [
             # num_output, activation, keep_prob
-            [2048, 'lrelu'],
+            [1024, 'lrelu'],
             [1, None],
         ]
 
@@ -468,7 +468,7 @@ def discriminator(input_x,
 
 def generator(input_x,
               noise=False,
-              z_dim=1,
+              z_dim=100,
               name='generator',
               conv_layers=None,
               deconv_layers=None,
@@ -496,18 +496,15 @@ def generator(input_x,
         else:
             input_z = tf.zeros(shape=input_x.get_shape().as_list()[: 3] + [z_dim],
                                dtype=tf.float32)
-        input_x = tf.concat([input_x, input_z], axis=3)
+        input_x = tf.concat([input_z, input_x], axis=3)
 
         if conv_layers is None:
             conv_layers = [
                 # filter size, stride, output channels
-                [(4, 4), (2, 2), 32],
-                [(4, 4), (2, 2), 64],
                 [(4, 4), (2, 2), 128],
                 [(4, 4), (2, 2), 256],
                 [(4, 4), (2, 2), 512],
                 [(4, 4), (2, 2), 1024],
-                [(4, 4), (2, 2), 2048],
             ]
 
         convolved = input_x
@@ -523,12 +520,9 @@ def generator(input_x,
             deconv_layers = [
                 # ksize, stride, out_channels
                 # ksize is divisible by stride to avoid checkerboard effect
-                [(4, 4), (2, 2), 2048],
                 [(4, 4), (2, 2), 1024],
                 [(4, 4), (2, 2), 512],
                 [(4, 4), (2, 2), 256],
-                [(4, 4), (2, 2), 128],
-                [(4, 4), (2, 2), 64],
                 [(4, 4), (2, 2), 3],
             ]
 
@@ -548,7 +542,7 @@ def generator(input_x,
 def build_and_train(epochs,
                     verbose_interval=5,
                     save_interval=500,
-                    batch_size=20,
+                    batch_size=10,
                     image_size=(256, 256),
                     save_model=True,
                     discriminator_scope='discriminator',
@@ -561,11 +555,11 @@ def build_and_train(epochs,
                     noise=False,
                     z_dim=1,
                     adversary_weight=1.0,
-                    l1_weight=1,
-                    epsilon=10e-12,
+                    l2_weight=1,
                     disc_lr=10e-6,
                     gen_lr=10e-6,
-                    keep_prob=1):
+                    keep_prob=1,
+                    summary_interval=50):
     """Build and train the graph
 
     Args:
@@ -585,11 +579,11 @@ def build_and_train(epochs,
         noise: Set to True to add noise to the generator.
         z_dim: Dimension of noise.
         adversary_weight: Weight for sigmoid cross entropy loss.
-        l1_weight: Weight for l1 loss.
-        epsilon: Fuzzy factor for loss functions.
+        l2_weight: Weight for l1 loss.
         disc_lr: Learning rate for discriminator optimizer.
         gen_lr: Learning rate for generator optimizer.
         keep_prob: Keep probability for dropout in discriminator.
+        summary_interval: Interval to keep a summary.
 
     Returns:
         None
@@ -623,20 +617,27 @@ def build_and_train(epochs,
                                            name=discriminator_scope,
                                            reuse_variables=True)
 
-    loss_disc = tf.reduce_mean(
-        - (tf.log(real_prob) + tf.log(1 - fake_prob + epsilon))
+    loss_disc_real = tf.reduce_mean(
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_real, labels=tf.ones_like(logits_real))
     )
+    loss_disc_fake = tf.reduce_mean(
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake, labels=tf.zeros_like(logits_fake))
+    )
+    loss_disc = loss_disc_real + loss_disc_fake
+
     loss_gen_gan = tf.reduce_mean(
-        - tf.log(fake_prob + epsilon)
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake, labels=tf.ones_like(logits_fake))
     )
     loss_gen_l1 = tf.reduce_mean(
-        tf.abs(generated - color_batch)
+        tf.nn.l2_loss(generated - color_batch) / (image_size[0] * image_size[1])
     )
-    loss_gen = loss_gen_gan * adversary_weight + loss_gen_l1 * l1_weight
+    loss_gen = loss_gen_gan * adversary_weight + loss_gen_l1 * l2_weight
 
+    tf.summary.scalar('real prob', real_prob)
+    tf.summary.scalar('fake prob', fake_prob)
     tf.summary.scalar('discriminator loss', loss_disc)
     tf.summary.scalar('adversary loss', loss_gen_gan)
-    tf.summary.scalar('l1 loss', loss_gen_l1)
+    tf.summary.scalar('l2 loss', loss_gen_l1)
     tf.summary.scalar('generator loss', loss_gen)
 
     all_vars = tf.trainable_variables()
@@ -662,7 +663,7 @@ def build_and_train(epochs,
     session = tf.Session()
 
     merged = tf.summary.merge_all()
-    writer = tf.summary.FileWriter(os.path.join('tensorboard', 'training'),
+    writer = tf.summary.FileWriter(os.path.join(save_model_to, 'tensorboard', 'training'),
                                    session.graph)
 
     session.run(tf.global_variables_initializer())
@@ -673,30 +674,46 @@ def build_and_train(epochs,
 
     saver = tf.train.Saver(var_list=vars_gen, max_to_keep=1)
 
+    current_step = tf.floordiv(global_step, 2)
+
     info = {
         # Contains information about the each training step
         'disc_nan': tf.is_nan(loss_disc),
         'gen_nan': tf.is_nan(loss_gen),
         'current_epoch': tf.floordiv(tf.div(global_step, 2), n_batches),
-        'current_step': tf.div(global_step, 2),
+        'current_step': current_step,
         'test_data': test_data,
+        'batch': bw_batch,
     }
 
     test_data_ens = []
+    step = 1
 
     try:
         while not coord.should_stop():
-            _, __, discriminator_loss, generator_loss, batch_info, summary = \
-                session.run([
-                    train_disc,
-                    train_gen,
-                    loss_disc,
-                    loss_gen,
-                    info,
-                    merged,
-                ])
 
-            writer.add_summary(summary, batch_info['current_step'])
+            if step % summary_interval == 0:
+                _, __, discriminator_loss, generator_loss, batch_info, summary = \
+                    session.run([
+                        train_disc,
+                        train_gen,
+                        loss_disc,
+                        loss_gen,
+                        info,
+                        merged
+                    ])
+                writer.add_summary(summary, step)
+            else:
+                _, __, discriminator_loss, generator_loss, batch_info = \
+                    session.run([
+                        train_disc,
+                        train_gen,
+                        loss_disc,
+                        loss_gen,
+                        info,
+                    ])
+
+            step = batch_info['current_step']
 
             if batch_info['disc_nan'] or batch_info['gen_nan']:
                 print('Training ended with an error at epoch {} batch {}'
@@ -724,8 +741,8 @@ def build_and_train(epochs,
     session.close()
 
     # Output test data as a pickle
-    with open('test_data.pickle', 'wb') as dumper:
-        pickle.dump(test_data, dumper)
+    with open(os.path.join(save_model_to, 'test_data.pickle'), 'wb') as dumper:
+        pickle.dump(test_data_ens, dumper)
 
 
 if __name__ == '__main__':
@@ -777,7 +794,7 @@ if __name__ == '__main__':
                         help='Noise dimension')
     parser.add_argument('--sigmoid-weight', type=float, default=1.0, dest='sigmoid_weight',
                         help='Weight for sigmoid cross entropy loss.')
-    parser.add_argument('--l1-weight', type=float, default=1.0, dest='l1_weight',
+    parser.add_argument('--l2-weight', type=float, default=1.0, dest='l2_weight',
                         help='Weight for l1 loss.')
     parser.add_argument('--epsilon', type=float, default=10e-12, dest='epsilon')
     parser.add_argument('--disc-lr', type=float, default=10e-11, dest='disc_lr',
@@ -806,9 +823,8 @@ if __name__ == '__main__':
                     noise=args.noise,
                     z_dim=args.z_dim,
                     adversary_weight=args.sigmoid_weight,
-                    l1_weight=args.l1_weight,
+                    l2_weight=args.l2_weight,
                     save_interval=args.save_interval,
-                    epsilon=args.epsilon,
                     disc_lr=args.disc_lr,
                     gen_lr=args.gen_lr,
                     keep_prob=args.keep_prob)
