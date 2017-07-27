@@ -541,7 +541,7 @@ def generator(input_x,
 
 def build_and_train(epochs,
                     verbose_interval=5,
-                    save_interval=500,
+                    save_interval=5000,
                     batch_size=10,
                     image_size=(256, 256),
                     save_model=True,
@@ -633,8 +633,8 @@ def build_and_train(epochs,
     )
     loss_gen = loss_gen_gan * adversary_weight + loss_gen_l1 * l2_weight
 
-    tf.summary.scalar('real prob', real_prob)
-    tf.summary.scalar('fake prob', fake_prob)
+    tf.summary.scalar('real prob', tf.reduce_mean(real_prob))
+    tf.summary.scalar('fake prob', tf.reduce_mean(fake_prob))
     tf.summary.scalar('discriminator loss', loss_disc)
     tf.summary.scalar('adversary loss', loss_gen_gan)
     tf.summary.scalar('l2 loss', loss_gen_l1)
@@ -672,7 +672,7 @@ def build_and_train(epochs,
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord, sess=session)
 
-    saver = tf.train.Saver(var_list=vars_gen, max_to_keep=1)
+    saver = tf.train.Saver(var_list=vars_gen, max_to_keep=3)
 
     current_step = tf.floordiv(global_step, 2)
 
@@ -687,11 +687,11 @@ def build_and_train(epochs,
     }
 
     test_data_ens = []
-    step = 1
+    step = 0
+    dumped = False
 
     try:
         while not coord.should_stop():
-
             if step % summary_interval == 0:
                 _, __, discriminator_loss, generator_loss, batch_info, summary = \
                     session.run([
@@ -702,7 +702,7 @@ def build_and_train(epochs,
                         info,
                         merged
                     ])
-                writer.add_summary(summary, step)
+                writer.add_summary(summary, batch_info['current_step'])
             else:
                 _, __, discriminator_loss, generator_loss, batch_info = \
                     session.run([
@@ -732,6 +732,12 @@ def build_and_train(epochs,
 
             test_data_ens.append(batch_info['test_data'])
 
+            # Output test data as a pickle
+            if not dumped:
+                with open(os.path.join(save_model_to, 'test_data.pickle'), 'wb') as dumper:
+                    pickle.dump(test_data_ens, dumper)
+                dumped = True
+
     except tf.errors.OutOfRangeError:
         print('Training complete.')
     finally:
@@ -739,10 +745,6 @@ def build_and_train(epochs,
 
     coord.join(threads)
     session.close()
-
-    # Output test data as a pickle
-    with open(os.path.join(save_model_to, 'test_data.pickle'), 'wb') as dumper:
-        pickle.dump(test_data_ens, dumper)
 
 
 if __name__ == '__main__':
