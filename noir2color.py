@@ -628,16 +628,16 @@ def build_and_train(epochs,
     loss_gen_gan = tf.reduce_mean(
         tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake, labels=tf.ones_like(logits_fake))
     )
-    loss_gen_l1 = tf.reduce_mean(
+    loss_gen_l2 = tf.reduce_mean(
         tf.nn.l2_loss(generated - color_batch) / (image_size[0] * image_size[1])
     )
-    loss_gen = loss_gen_gan * adversary_weight + loss_gen_l1 * l2_weight
+    loss_gen = loss_gen_gan * adversary_weight + loss_gen_l2 * l2_weight
 
     tf.summary.scalar('real prob', tf.reduce_mean(real_prob))
     tf.summary.scalar('fake prob', tf.reduce_mean(fake_prob))
     tf.summary.scalar('discriminator loss', loss_disc)
     tf.summary.scalar('adversary loss', loss_gen_gan)
-    tf.summary.scalar('l2 loss', loss_gen_l1)
+    tf.summary.scalar('l2 loss', loss_gen_l2)
     tf.summary.scalar('generator loss', loss_gen)
 
     all_vars = tf.trainable_variables()
@@ -797,7 +797,7 @@ if __name__ == '__main__':
     parser.add_argument('--sigmoid-weight', type=float, default=1.0, dest='sigmoid_weight',
                         help='Weight for sigmoid cross entropy loss.')
     parser.add_argument('--l2-weight', type=float, default=1.0, dest='l2_weight',
-                        help='Weight for l1 loss.')
+                        help='Weight for l2 loss.')
     parser.add_argument('--epsilon', type=float, default=10e-12, dest='epsilon')
     parser.add_argument('--disc-lr', type=float, default=10e-11, dest='disc_lr',
                         help='Learning rate for discriminator optimizer.')
