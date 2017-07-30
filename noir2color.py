@@ -541,6 +541,7 @@ def generator(input_x,
                                  ksize=layer[0],
                                  stride=layer[1],
                                  out_channels=layer[2],
+                                 keep_prob=layer[3],
                                  batchnorm=batchnorm,
                                  name='gen_deconv_{}'.format(layer_i))
 

@@ -1,6 +1,7 @@
 # noir2color
 
 ## Introduction
+This is a Python 2.7 implementation of [noir2color](https://github.com/walter090/noir2color)
 This repo contain the project to train and test a conditional generative adversarial network model to colorize black and white images. The implementation is based on Ian Goodfellow's [GAN paper](https://arxiv.org/abs/1406.2661).
 
 ## Requirements
