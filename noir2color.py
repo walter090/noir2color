@@ -154,7 +154,8 @@ def deconv(x,
            output_shape=None,
            padding='SAME',
            name='deconv',
-           batchnorm=False):
+           batchnorm=False,
+           keep_prob=1.):
     """Deconvolution (convolution transpose) layer.
 
     Args:
@@ -168,6 +169,8 @@ def deconv(x,
             'VALID', default 'SAME' padding.
         name: Name for the variable scope of this layer.
         batchnorm: Set True to use batch normalization.
+        keep_prob: Keep probability for dropout. Defaults 1, set to a value smaller
+            than 1 to activate drop out.
 
     Returns:
         Output tensor.
@@ -216,6 +219,9 @@ def deconv(x,
 
         if batchnorm:
             deconv_out = batch_normalize(deconv_out)
+
+        if keep_prob < 1.:
+            deconv_out = tf.nn.dropout(deconv_out, keep_prob=keep_prob)
 
         deconv_out = lrelu(deconv_out)
 
@@ -408,6 +414,7 @@ def discriminator(input_x,
                   base_x,
                   keep_prob=1,
                   reuse_variables=None,
+                  batchnorm=True,
                   name='discriminator'):
     """Builds the discriminator part of the GAN.
 
@@ -421,6 +428,7 @@ def discriminator(input_x,
         keep_prob: Keep probability for dropout layers, if keep probability is 1
             there is no dropout. Defaults 1.
         reuse_variables: Set to True to reuse variables.
+        batchnorm: Set True to use batch normalization.
         name: Variable scope name.
 
     Returns:
@@ -441,6 +449,7 @@ def discriminator(input_x,
         conv_out = joint_x
         for layer_i, layer in enumerate(conv_layers):
             conv_out = conv_avg_pool(conv_out,
+                                     batchnorm=batchnorm,
                                      conv_ksize=layer[0],
                                      conv_stride=layer[1],
                                      out_channels=layer[2],
@@ -467,7 +476,7 @@ def discriminator(input_x,
 
 
 def generator(input_x,
-              noise=False,
+              noise=True,
               z_dim=100,
               name='generator',
               conv_layers=None,
@@ -518,12 +527,12 @@ def generator(input_x,
 
         if deconv_layers is None:
             deconv_layers = [
-                # ksize, stride, out_channels
+                # ksize, stride, out_channels, keep_prob
                 # ksize is divisible by stride to avoid checkerboard effect
-                [(4, 4), (2, 2), 1024],
-                [(4, 4), (2, 2), 512],
-                [(4, 4), (2, 2), 256],
-                [(4, 4), (2, 2), 3],
+                [(4, 4), (2, 2), 1024, 0.5],
+                [(4, 4), (2, 2), 512, 0.5],
+                [(4, 4), (2, 2), 256, 0.75],
+                [(4, 4), (2, 2), 3, 0.9],
             ]
 
         deconvolved = convolved
@@ -543,6 +552,7 @@ def build_and_train(epochs,
                     verbose_interval=5,
                     save_interval=5000,
                     batch_size=10,
+                    batchnorm=True,
                     image_size=(256, 256),
                     save_model=True,
                     discriminator_scope='discriminator',
@@ -553,13 +563,14 @@ def build_and_train(epochs,
                     model_name='trained_model',
                     test_size=0.05,
                     noise=False,
-                    z_dim=1,
-                    adversary_weight=1.0,
-                    l2_weight=1,
+                    z_dim=100,
+                    adversary_weight=0.5,
+                    l2_weight=0.5,
                     disc_lr=10e-6,
                     gen_lr=10e-6,
                     keep_prob=1,
-                    summary_interval=50):
+                    summary_interval=50,
+                    check_progress=None):
     """Build and train the graph
 
     Args:
@@ -567,6 +578,7 @@ def build_and_train(epochs,
         verbose_interval: Interval between training messages.
         save_interval: Interval to save the model.
         batch_size: Size of each training batch.
+        batchnorm: Set True to use batch normalization.
         image_size: Specify imported image size.
         save_model: Set to True to save model periodically.
         discriminator_scope: Name for the discriminator variable scope.
@@ -584,6 +596,8 @@ def build_and_train(epochs,
         gen_lr: Learning rate for generator optimizer.
         keep_prob: Keep probability for dropout in discriminator.
         summary_interval: Interval to keep a summary.
+        check_progress: Set to the saved model path to continue
+            training using saved variables. Defaults None.
 
     Returns:
         None
@@ -604,14 +618,20 @@ def build_and_train(epochs,
                                            epochs=epochs)
 
     # Generated image
-    generated = generator(input_x=bw_batch, name=generator_scope, noise=noise, z_dim=z_dim)
+    generated = generator(input_x=bw_batch,
+                          name=generator_scope,
+                          noise=noise,
+                          z_dim=z_dim,
+                          batchnorm=batchnorm)
     # Discriminator probability for real images
     logits_real, real_prob = discriminator(input_x=color_batch,
+                                           batchnorm=batchnorm,
                                            base_x=bw_batch,
                                            keep_prob=keep_prob,
                                            name=discriminator_scope)
     # Discriminator probability for fake images
     logits_fake, fake_prob = discriminator(input_x=generated,
+                                           batchnorm=batchnorm,
                                            base_x=bw_batch,
                                            keep_prob=keep_prob,
                                            name=discriminator_scope,
@@ -628,16 +648,16 @@ def build_and_train(epochs,
     loss_gen_gan = tf.reduce_mean(
         tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake, labels=tf.ones_like(logits_fake))
     )
-    loss_gen_l1 = tf.reduce_mean(
+    loss_gen_l2 = tf.reduce_mean(
         tf.nn.l2_loss(generated - color_batch) / (image_size[0] * image_size[1])
     )
-    loss_gen = loss_gen_gan * adversary_weight + loss_gen_l1 * l2_weight
+    loss_gen = loss_gen_gan * adversary_weight + loss_gen_l2 * l2_weight
 
     tf.summary.scalar('real prob', tf.reduce_mean(real_prob))
     tf.summary.scalar('fake prob', tf.reduce_mean(fake_prob))
     tf.summary.scalar('discriminator loss', loss_disc)
     tf.summary.scalar('adversary loss', loss_gen_gan)
-    tf.summary.scalar('l2 loss', loss_gen_l1)
+    tf.summary.scalar('l2 loss', loss_gen_l2)
     tf.summary.scalar('generator loss', loss_gen)
 
     all_vars = tf.trainable_variables()
@@ -662,6 +682,10 @@ def build_and_train(epochs,
     # Initialize session
     session = tf.Session()
 
+    if check_progress is not None:
+        saver = tf.train.Saver()
+        saver.restore(sess=session, save_path=check_progress)
+
     merged = tf.summary.merge_all()
     writer = tf.summary.FileWriter(os.path.join(save_model_to, 'tensorboard', 'training'),
                                    session.graph)
@@ -672,7 +696,7 @@ def build_and_train(epochs,
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord, sess=session)
 
-    saver = tf.train.Saver(var_list=vars_gen, max_to_keep=3)
+    saver = tf.train.Saver(var_list=all_vars, max_to_keep=5)
 
     current_step = tf.floordiv(global_step, 2)
 
