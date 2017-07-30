@@ -821,7 +821,7 @@ if __name__ == '__main__':
     parser.add_argument('--sigmoid-weight', type=float, default=1.0, dest='sigmoid_weight',
                         help='Weight for sigmoid cross entropy loss.')
     parser.add_argument('--l2-weight', type=float, default=1.0, dest='l2_weight',
-                        help='Weight for l1 loss.')
+                        help='Weight for l2 loss.')
     parser.add_argument('--epsilon', type=float, default=10e-12, dest='epsilon')
     parser.add_argument('--disc-lr', type=float, default=10e-11, dest='disc_lr',
                         help='Learning rate for discriminator optimizer.')
