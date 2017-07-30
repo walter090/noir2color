@@ -23,7 +23,7 @@ def model_test(meta, input_image, noise=True, z_dim=100):
 
         base_img = tf.cast(tf.convert_to_tensor(input_image), dtype=tf.float32)
         base_img = noir2color.scale(base_img)
-        base_img = tf.reshape(base_img, [size, *shape, 1])
+        base_img = tf.reshape(base_img, [size, shape[0], shape[1], 1])
 
         gen_tensor = noir2color.generator(input_x=base_img, noise=noise, z_dim=z_dim)
         tf.get_variable_scope().reuse_variables()
