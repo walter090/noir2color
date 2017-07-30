@@ -477,10 +477,10 @@ def discriminator(input_x,
 
 def generator(input_x,
               noise=True,
-              z_dim=100,
+              z_dim=50,
               name='generator',
-              conv_layers=None,
-              deconv_layers=None,
+              conv_layer_config=None,
+              deconv_layer_config=None,
               batchnorm=True):
     """Generator network
 
@@ -489,9 +489,9 @@ def generator(input_x,
         noise: Set True to add noise to input. Turn off during testing.
         z_dim: Noise dimension
         name: Variable scope name
-        conv_layers: A list of lists specifying parameters for each conv layer.
+        conv_layer_config: A list of lists specifying parameters for each conv layer.
             Defaults None.
-        deconv_layers: A list of lists specifying parameters for each deconv layer.
+        deconv_layer_config: A list of lists specifying parameters for each deconv layer.
             Defaults None.
         batchnorm: Set True to use batch normalization. Defaults True.
 
@@ -507,9 +507,12 @@ def generator(input_x,
                                dtype=tf.float32)
         input_x = tf.concat([input_z, input_x], axis=3)
 
-        if conv_layers is None:
-            conv_layers = [
+        layers = []  # List to store each layer output
+
+        if conv_layer_config is None:
+            conv_layer_config = [
                 # filter size, stride, output channels
+                [(4, 4), (2, 2), 64],
                 [(4, 4), (2, 2), 128],
                 [(4, 4), (2, 2), 256],
                 [(4, 4), (2, 2), 512],
@@ -517,33 +520,47 @@ def generator(input_x,
             ]
 
         convolved = input_x
-        for layer_i, layer in enumerate(conv_layers):
+        for layer_i, layer in enumerate(conv_layer_config):
             convolved = conv_avg_pool(convolved,
                                       conv_ksize=layer[0],
                                       conv_stride=layer[1],
                                       out_channels=layer[2],
-                                      batchnorm=batchnorm,
+                                      batchnorm=False if layer_i == 0 else batchnorm,
                                       name='gen_conv_{}'.format(layer_i))
 
-        if deconv_layers is None:
-            deconv_layers = [
+            # The saved layer outputs will be useful for skip connections
+            layers.append(convolved)
+
+        if deconv_layer_config is None:
+            deconv_layer_config = [
                 # ksize, stride, out_channels, keep_prob
                 # ksize is divisible by stride to avoid checkerboard effect
                 [(4, 4), (2, 2), 1024, 0.5],
                 [(4, 4), (2, 2), 512, 0.5],
                 [(4, 4), (2, 2), 256, 0.75],
-                [(4, 4), (2, 2), 3, 0.9],
+                [(4, 4), (2, 2), 128, 0.9],
+                [(4, 4), (2, 2), 3, 1.],
             ]
 
-        deconvolved = convolved
-        for layer_i, layer in enumerate(deconv_layers):
+        config_length = len(deconv_layer_config)
+
+        deconvolved = layers[-1]
+
+        for layer_i, layer in enumerate(deconv_layer_config):
+            skip_i = config_length - layer_i - 1  # Skip layer index
+
+            if not layer_i == 0:
+                deconvolved = tf.concat([layers[-1], layers[skip_i]], axis=3)
+
             deconvolved = deconv(deconvolved,
                                  ksize=layer[0],
                                  stride=layer[1],
                                  out_channels=layer[2],
                                  keep_prob=layer[3],
-                                 batchnorm=batchnorm,
+                                 batchnorm=False if layer_i == config_length - 1 else batchnorm,
                                  name='gen_deconv_{}'.format(layer_i))
+
+            layers.append(deconvolved)
 
         generated = tf.nn.tanh(deconvolved)
         return generated
@@ -564,7 +581,7 @@ def build_and_train(epochs,
                     model_name='trained_model',
                     test_size=0.05,
                     noise=False,
-                    z_dim=100,
+                    z_dim=50,
                     adversary_weight=0.5,
                     l2_weight=0.5,
                     disc_lr=10e-6,
@@ -639,15 +656,18 @@ def build_and_train(epochs,
                                            reuse_variables=True)
 
     loss_disc_real = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_real, labels=tf.ones_like(logits_real))
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_real,
+                                                labels=tf.ones_like(logits_real))
     )
     loss_disc_fake = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake, labels=tf.zeros_like(logits_fake))
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake,
+                                                labels=tf.zeros_like(logits_fake))
     )
     loss_disc = loss_disc_real + loss_disc_fake
 
     loss_gen_gan = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake, labels=tf.ones_like(logits_fake))
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake,
+                                                labels=tf.ones_like(logits_fake))
     )
     loss_gen_l2 = tf.reduce_mean(
         tf.nn.l2_loss(generated - color_batch) / (image_size[0] * image_size[1])
