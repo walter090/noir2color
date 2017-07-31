@@ -773,7 +773,7 @@ def build_and_train(epochs,
                 if save_model:
                     saver.save(sess=session,
                                save_path=os.path.join(save_model_to, model_name),
-                               global_step=global_step)
+                               global_step=current_step)
 
             test_data_ens.append(batch_info['test_data'])
 
