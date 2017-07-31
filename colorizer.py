@@ -25,7 +25,8 @@ def model_test(meta, input_image, noise=True, z_dim=100):
         base_img = noir2color.scale(base_img)
         base_img = tf.reshape(base_img, [size, shape[0], shape[1], 1])
 
-        gen_tensor = noir2color.generator(input_x=base_img, noise=noise, z_dim=z_dim)
+        gen_tensor = noir2color.generator(input_x=base_img, testing=True,
+                                          noise=noise, z_dim=z_dim)
         tf.get_variable_scope().reuse_variables()
 
         saver = tf.train.Saver()

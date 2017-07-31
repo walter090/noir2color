@@ -483,7 +483,8 @@ def generator(input_x,
               conv_layer_config=None,
               deconv_layer_config=None,
               batchnorm=True,
-              skip_conn=True):
+              skip_conn=True,
+              testing=False):
     """Generator network
 
     Args:
@@ -497,6 +498,7 @@ def generator(input_x,
             Defaults None.
         batchnorm: Set True to use batch normalization. Defaults True.
         skip_conn: Set True to use skip connections.
+        testing: Set True to turn off dropout during testing.
 
     Returns:
         Generated image
@@ -538,10 +540,11 @@ def generator(input_x,
             deconv_layer_config = [
                 # ksize, stride, out_channels, keep_prob
                 # ksize is divisible by stride to avoid checkerboard effect
-                [(4, 4), (2, 2), 1024, 0.5],
-                [(4, 4), (2, 2), 512, 0.5],
-                [(4, 4), (2, 2), 256, 0.75],
-                [(4, 4), (2, 2), 128, 0.9],
+                # Turn off dropout during testing.
+                [(4, 4), (2, 2), 1024, 0.5 if not testing else 1.],
+                [(4, 4), (2, 2), 512, 0.5 if not testing else 1.],
+                [(4, 4), (2, 2), 256, 0.75 if not testing else 1.],
+                [(4, 4), (2, 2), 128, 0.9 if not testing else 1.],
                 [(4, 4), (2, 2), 3, 1.],
             ]
 
@@ -805,7 +808,7 @@ if __name__ == '__main__':
                              'this argument as it does not have a default.')
     parser.add_argument('-v', '--verb-interval', type=int, default=20, dest='verbose_interval',
                         help='Specify number of steps to print a message')
-    parser.add_argument('-b', '--batch-size', type=int, default=20, dest='batch_size',
+    parser.add_argument('-b', '--batch-size', type=int, default=16, dest='batch_size',
                         help='Set batch size')
     parser.add_argument('--height', type=int, default=256, dest='height',
                         help='Set imported image height')
