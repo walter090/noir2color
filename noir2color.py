@@ -412,7 +412,7 @@ def input_pipeline(images_tuple, epochs, dim=(256, 256), batch_size=50):
 
 def discriminator(input_x,
                   base_x,
-                  keep_prob=1,
+                  keep_prob=1.,
                   reuse_variables=None,
                   batchnorm=True,
                   name='discriminator'):
@@ -440,6 +440,7 @@ def discriminator(input_x,
         conv_layers = [
             # Specify each convolution layer parameters
             # conv_ksize, conv_stride, out_channels, pool_ksize, pool_stride
+            [(4, 4), (2, 2), 64, (4, 4), (2, 2)],
             [(4, 4), (2, 2), 128, (4, 4), (2, 2)],
             [(4, 4), (2, 2), 256, (2, 2), (1, 1)],
             [(4, 4), (2, 2), 512, (2, 2), (1, 1)],
@@ -477,11 +478,12 @@ def discriminator(input_x,
 
 def generator(input_x,
               noise=True,
-              z_dim=50,
+              z_dim=100,
               name='generator',
               conv_layer_config=None,
               deconv_layer_config=None,
-              batchnorm=True):
+              batchnorm=True,
+              skip_conn=True):
     """Generator network
 
     Args:
@@ -494,6 +496,7 @@ def generator(input_x,
         deconv_layer_config: A list of lists specifying parameters for each deconv layer.
             Defaults None.
         batchnorm: Set True to use batch normalization. Defaults True.
+        skip_conn: Set True to use skip connections.
 
     Returns:
         Generated image
@@ -507,7 +510,7 @@ def generator(input_x,
                                dtype=tf.float32)
         input_x = tf.concat([input_z, input_x], axis=3)
 
-        layers = []  # List to store each layer output
+        conv_layers = []  # List to store each layer output
 
         if conv_layer_config is None:
             conv_layer_config = [
@@ -529,7 +532,7 @@ def generator(input_x,
                                       name='gen_conv_{}'.format(layer_i))
 
             # The saved layer outputs will be useful for skip connections
-            layers.append(convolved)
+            conv_layers.append(convolved)
 
         if deconv_layer_config is None:
             deconv_layer_config = [
@@ -544,13 +547,14 @@ def generator(input_x,
 
         config_length = len(deconv_layer_config)
 
-        deconvolved = layers[-1]
+        deconvolved = conv_layers[-1]
 
         for layer_i, layer in enumerate(deconv_layer_config):
             skip_i = config_length - layer_i - 1  # Skip layer index
 
-            if not layer_i == 0:
-                deconvolved = tf.concat([layers[-1], layers[skip_i]], axis=3)
+            # No skip in first layer
+            if skip_conn and not layer_i == 0:
+                deconvolved = tf.concat([deconvolved, conv_layers[skip_i]], axis=3)
 
             deconvolved = deconv(deconvolved,
                                  ksize=layer[0],
@@ -560,16 +564,15 @@ def generator(input_x,
                                  batchnorm=False if layer_i == config_length - 1 else batchnorm,
                                  name='gen_deconv_{}'.format(layer_i))
 
-            layers.append(deconvolved)
-
         generated = tf.nn.tanh(deconvolved)
+
         return generated
 
 
 def build_and_train(epochs,
-                    verbose_interval=5,
-                    save_interval=5000,
-                    batch_size=10,
+                    verbose_interval=20,
+                    save_interval=1000,
+                    batch_size=20,
                     batchnorm=True,
                     image_size=(256, 256),
                     save_model=True,
@@ -580,13 +583,13 @@ def build_and_train(epochs,
                     save_model_to='saved_model',
                     model_name='trained_model',
                     test_size=0.05,
-                    noise=False,
-                    z_dim=50,
+                    noise=True,
+                    z_dim=100,
                     adversary_weight=0.5,
                     l2_weight=0.5,
-                    disc_lr=10e-6,
-                    gen_lr=10e-6,
-                    keep_prob=1,
+                    disc_lr=10e-5,
+                    gen_lr=10e-5,
+                    keep_prob=0.5,
                     summary_interval=50,
                     check_progress=None):
     """Build and train the graph
@@ -621,6 +624,9 @@ def build_and_train(epochs,
         None
     """
     tf.reset_default_graph()
+
+    # Initialize session
+    session = tf.Session()
 
     # Start input pipeline
     input_files, dataset_size = process_data(color_folder=colored_folder,
@@ -681,11 +687,11 @@ def build_and_train(epochs,
     tf.summary.scalar('l2 loss', loss_gen_l2)
     tf.summary.scalar('generator loss', loss_gen)
 
+    global_step = tf.Variable(0, trainable=False)
+
     all_vars = tf.trainable_variables()
     vars_disc = [var for var in all_vars if var.name.startswith(discriminator_scope)]
     vars_gen = [var for var in all_vars if var.name.startswith(generator_scope)]
-
-    global_step = tf.Variable(0, trainable=False)
 
     optimizer_disc = tf.train.AdamOptimizer(learning_rate=disc_lr)
     train_disc = optimizer_disc.minimize(loss_disc,
@@ -697,15 +703,15 @@ def build_and_train(epochs,
                                        var_list=vars_gen,
                                        global_step=global_step)
 
-    n_batches = tf.floordiv(dataset_size, batch_size)  # Number of batches in the entire set
-    # Number of epochs can be calculated from global_step // n_batches
-
-    # Initialize session
-    session = tf.Session()
-
     if check_progress is not None:
+        tf.get_variable_scope().reuse_variables()
         saver = tf.train.Saver()
         saver.restore(sess=session, save_path=check_progress)
+    else:
+        saver = tf.train.Saver(max_to_keep=5)
+
+    n_batches = tf.floordiv(dataset_size, batch_size)  # Number of batches in the entire set
+    # Number of epochs can be calculated from global_step // n_batches
 
     merged = tf.summary.merge_all()
     writer = tf.summary.FileWriter(os.path.join(save_model_to, 'tensorboard', 'training'),
@@ -716,8 +722,6 @@ def build_and_train(epochs,
 
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord, sess=session)
-
-    saver = tf.train.Saver(var_list=all_vars, max_to_keep=5)
 
     current_step = tf.floordiv(global_step, 2)
 
@@ -731,9 +735,9 @@ def build_and_train(epochs,
         'batch': bw_batch,
     }
 
-    test_data_ens = []
-    step = 0
-    dumped = False
+    test_data_ens = []  # List of batches of test data
+    step = 0  # Initialize integer current step
+    dumped = False  # Whether the test data has been dumped
 
     try:
         while not coord.should_stop():
@@ -773,7 +777,7 @@ def build_and_train(epochs,
                 if save_model:
                     saver.save(sess=session,
                                save_path=os.path.join(save_model_to, model_name),
-                               global_step=current_step)
+                               global_step=current_step - 1)
 
             test_data_ens.append(batch_info['test_data'])
 
@@ -828,7 +832,7 @@ if __name__ == '__main__':
                         help='Name to save trained models as.')
     parser.add_argument('--test-size', type=float, default=0.05, dest='test_size',
                         help='Test size')
-    parser.add_argument('--save-interval', type=float, default=500, dest='save_interval',
+    parser.add_argument('--save-interval', type=float, default=1000, dest='save_interval',
                         help='Intervals between training steps to save the latest model.')
 
     noise_group = parser.add_mutually_exclusive_group()
@@ -837,21 +841,22 @@ if __name__ == '__main__':
     noise_group.add_argument('--no-noise', action='store_false', dest='noise',
                              help='Do not add noise to input image.')
 
-    parser.add_argument('--z-dim', type=int, default=1, dest='z_dim',
+    parser.add_argument('--z-dim', type=int, default=100, dest='z_dim',
                         help='Noise dimension')
-    parser.add_argument('--sigmoid-weight', type=float, default=1.0, dest='sigmoid_weight',
+    parser.add_argument('--adversary-weight', type=float, default=0.5, dest='adversary_weight',
                         help='Weight for sigmoid cross entropy loss.')
-    parser.add_argument('--l2-weight', type=float, default=1.0, dest='l2_weight',
+    parser.add_argument('--l2-weight', type=float, default=0.5, dest='l2_weight',
                         help='Weight for l2 loss.')
     parser.add_argument('--epsilon', type=float, default=10e-12, dest='epsilon')
-    parser.add_argument('--disc-lr', type=float, default=10e-11, dest='disc_lr',
+    parser.add_argument('--disc-lr', type=float, default=10e-5, dest='disc_lr',
                         help='Learning rate for discriminator optimizer.')
-    parser.add_argument('--gen-lr', type=float, default=10e-11, dest='gen_lr',
+    parser.add_argument('--gen-lr', type=float, default=10e-5, dest='gen_lr',
                         help='Learning rate for generator optimizer.')
-    parser.add_argument('--keep-prob', type=float, default=1., dest='keep_prob',
+    parser.add_argument('--keep-prob', type=float, default=0.5, dest='keep_prob',
                         help='Keep probability for dropout in discriminator.')
+    parser.add_argument('--progress', type=str, default=None, dest='check_progress')
 
-    parser.set_defaults(noise=False, save_model=True)
+    parser.set_defaults(noise=True, save_model=True)
 
     args = parser.parse_args()
 
@@ -869,9 +874,10 @@ if __name__ == '__main__':
                     test_size=args.test_size,
                     noise=args.noise,
                     z_dim=args.z_dim,
-                    adversary_weight=args.sigmoid_weight,
+                    adversary_weight=args.adversary_weight,
                     l2_weight=args.l2_weight,
                     save_interval=args.save_interval,
                     disc_lr=args.disc_lr,
                     gen_lr=args.gen_lr,
-                    keep_prob=args.keep_prob)
+                    keep_prob=args.keep_prob,
+                    check_progress=args.check_progress)
