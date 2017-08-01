@@ -588,8 +588,9 @@ def build_and_train(epochs,
                     test_size=0.05,
                     noise=True,
                     z_dim=100,
+                    helper_loss='l1',
                     adversary_weight=0.5,
-                    l2_weight=0.5,
+                    helper_weight=0.5,
                     disc_lr=10e-5,
                     gen_lr=10e-5,
                     keep_prob=0.5,
@@ -614,8 +615,9 @@ def build_and_train(epochs,
         test_size: Split factor for test set, defaults 0.1
         noise: Set to True to add noise to the generator.
         z_dim: Dimension of noise.
+        helper_loss: secondary loss function for generator.
         adversary_weight: Weight for sigmoid cross entropy loss.
-        l2_weight: Weight for l1 loss.
+        helper_weight: Weight for l1 loss.
         disc_lr: Learning rate for discriminator optimizer.
         gen_lr: Learning rate for generator optimizer.
         keep_prob: Keep probability for dropout in discriminator.
@@ -678,16 +680,18 @@ def build_and_train(epochs,
         tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake,
                                                 labels=tf.ones_like(logits_fake))
     )
-    loss_gen_l2 = tf.reduce_mean(
+    loss_gen_helper = tf.reduce_mean(
         tf.nn.l2_loss(generated - color_batch) / (image_size[0] * image_size[1])
+    ) if helper_loss == 'l2' else tf.reduce_mean(
+        tf.abs(generated - color_batch) / (image_size[0] * image_size[1])
     )
-    loss_gen = loss_gen_gan * adversary_weight + loss_gen_l2 * l2_weight
+    loss_gen = loss_gen_gan * adversary_weight + loss_gen_helper * helper_weight
 
     tf.summary.scalar('real prob', tf.reduce_mean(real_prob))
     tf.summary.scalar('fake prob', tf.reduce_mean(fake_prob))
     tf.summary.scalar('discriminator loss', loss_disc)
     tf.summary.scalar('adversary loss', loss_gen_gan)
-    tf.summary.scalar('l2 loss', loss_gen_l2)
+    tf.summary.scalar('l2 loss', loss_gen_helper)
     tf.summary.scalar('generator loss', loss_gen)
 
     global_step = tf.Variable(0, trainable=False)
@@ -878,7 +882,7 @@ if __name__ == '__main__':
                     noise=args.noise,
                     z_dim=args.z_dim,
                     adversary_weight=args.adversary_weight,
-                    l2_weight=args.l2_weight,
+                    helper_weight=args.l2_weight,
                     save_interval=args.save_interval,
                     disc_lr=args.disc_lr,
                     gen_lr=args.gen_lr,
