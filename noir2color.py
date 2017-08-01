@@ -575,7 +575,7 @@ def generator(input_x,
 def build_and_train(epochs,
                     verbose_interval=20,
                     save_interval=1000,
-                    batch_size=20,
+                    batch_size=32,
                     batchnorm=True,
                     image_size=(256, 256),
                     save_model=True,
@@ -686,7 +686,7 @@ def build_and_train(epochs,
     loss_gen_helper = tf.reduce_mean(
         tf.nn.l2_loss(generated - color_batch) / (image_size[0] * image_size[1])
     ) if helper_loss == 'l2' else tf.reduce_mean(
-        tf.abs(generated - color_batch) / (image_size[0] * image_size[1])
+        tf.abs(generated - color_batch)
     )
     loss_gen = loss_gen_gan * adversary_weight + loss_gen_helper * helper_weight
 
@@ -816,7 +816,7 @@ if __name__ == '__main__':
                              'this argument as it does not have a default.')
     parser.add_argument('-v', '--verb-interval', type=int, default=20, dest='verbose_interval',
                         help='Specify number of steps to print a message')
-    parser.add_argument('-b', '--batch-size', type=int, default=16, dest='batch_size',
+    parser.add_argument('-b', '--batch-size', type=int, default=32, dest='batch_size',
                         help='Set batch size')
     parser.add_argument('--height', type=int, default=256, dest='height',
                         help='Set imported image height')
