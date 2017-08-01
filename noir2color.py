@@ -696,7 +696,7 @@ def build_and_train(epochs,
     tf.summary.scalar('adversary loss', loss_gen_gan)
     tf.summary.scalar('helper loss', loss_gen_helper)
     tf.summary.scalar('generator loss', loss_gen)
-    tf.summary.image('generated', generated[0] * 127)
+    tf.summary.image('generated', generated * 127)
 
     global_step = tf.Variable(0, trainable=False)
 
