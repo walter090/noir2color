@@ -1,6 +1,8 @@
 import tensorflow as tf
 import noir2color
 
+from tools import image_process
+
 
 def model_test(meta, input_image, noise=True, z_dim=100):
     """Use the trained generator
@@ -33,6 +35,11 @@ def model_test(meta, input_image, noise=True, z_dim=100):
         saver.restore(session, meta)
 
         gen_img = session.run(gen_tensor)
+
+    # Scale the image to RGB format.
+    gen_img = image_process.scale(gen_img,
+                                  original_range=(-1, 1),
+                                  target_range=(0, 255))
 
     return gen_img
 
