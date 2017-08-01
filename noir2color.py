@@ -676,10 +676,13 @@ def build_and_train(epochs,
     )
     loss_disc = loss_disc_real + loss_disc_fake
 
+    # Loss by discriminator
     loss_gen_gan = tf.reduce_mean(
         tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_fake,
                                                 labels=tf.ones_like(logits_fake))
     )
+    # Loss by L1 or L2, per pixel loss
+    # Loss compared to true image
     loss_gen_helper = tf.reduce_mean(
         tf.nn.l2_loss(generated - color_batch) / (image_size[0] * image_size[1])
     ) if helper_loss == 'l2' else tf.reduce_mean(
@@ -691,8 +694,9 @@ def build_and_train(epochs,
     tf.summary.scalar('fake prob', tf.reduce_mean(fake_prob))
     tf.summary.scalar('discriminator loss', loss_disc)
     tf.summary.scalar('adversary loss', loss_gen_gan)
-    tf.summary.scalar('l2 loss', loss_gen_helper)
+    tf.summary.scalar('helper loss', loss_gen_helper)
     tf.summary.scalar('generator loss', loss_gen)
+    tf.summary.image('generated', generated[0] * 127)
 
     global_step = tf.Variable(0, trainable=False)
 
@@ -852,7 +856,7 @@ if __name__ == '__main__':
                         help='Noise dimension')
     parser.add_argument('--adversary-weight', type=float, default=0.5, dest='adversary_weight',
                         help='Weight for sigmoid cross entropy loss.')
-    parser.add_argument('--l2-weight', type=float, default=0.5, dest='l2_weight',
+    parser.add_argument('--helper-weight', type=float, default=0.5, dest='helper_weight',
                         help='Weight for l2 loss.')
     parser.add_argument('--epsilon', type=float, default=10e-12, dest='epsilon')
     parser.add_argument('--disc-lr', type=float, default=10e-5, dest='disc_lr',
@@ -882,7 +886,7 @@ if __name__ == '__main__':
                     noise=args.noise,
                     z_dim=args.z_dim,
                     adversary_weight=args.adversary_weight,
-                    helper_weight=args.l2_weight,
+                    helper_weight=args.helper_weight,
                     save_interval=args.save_interval,
                     disc_lr=args.disc_lr,
                     gen_lr=args.gen_lr,
