@@ -24,3 +24,7 @@ python noir2color.py -h
 ### Colorize
 To use a trained model, use the model_test function in colorizer.py. The function takes one or a list of black and white images and output the colorized. For details regrading the arguments for this function, check the docstring.
 
+To colorize one single image, use
+```commandline
+python colorizer.py --meta dir/to/saved/model --input input_image.jpg
+```
