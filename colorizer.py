@@ -8,6 +8,15 @@ from tools import image_process
 
 
 def test_score(output, target):
+    """Computes the test score of the generated images
+
+    Args:
+        output: An array presentation of generated images
+        target: An array presentation of target images
+
+    Returns:
+        Test score
+    """
     diff = np.abs(target - output)
     per_pixel_l1 = np.mean(diff)
 
