@@ -2,11 +2,20 @@ import tensorflow as tf
 import noir2color
 import warnings
 import matplotlib.pyplot as plt
+import numpy as np
 
 from tools import image_process
 
 
-def model_test(meta, input_image=None, input_image_file=None, noise=True, z_dim=100):
+def test_score(output, target):
+    diff = np.abs(target - output)
+    per_pixel_l1 = np.mean(diff)
+
+    return per_pixel_l1
+
+
+def model_test(meta, input_image=None, input_target=None,
+               input_image_file=None, noise=True, z_dim=100):
     """Use the trained generator
 
     Function for using the trained generator, loads the trained weights and biases
@@ -15,6 +24,8 @@ def model_test(meta, input_image=None, input_image_file=None, noise=True, z_dim=
     Args:
         meta: string, checkpoint file
         input_image: 2-D or 3-D array, a single or list of input images.
+        input_target: Optional target images for input, if provided, print
+            the score.
         input_image_file: String of the name of the input image file,
             this argument is only used if input_image is None and is ignored when
             input_image is provided. This argument is present for when the user
@@ -68,6 +79,9 @@ def model_test(meta, input_image=None, input_image_file=None, noise=True, z_dim=
         plt.axes('off')
         plt.imshow(gen_img)
         plt.show()
+
+    if input_target is not None:
+        print('Score: {}'.format(test_score(gen_img, input_target)))
 
     # Close the session
     session.close()
