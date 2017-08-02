@@ -1,6 +1,7 @@
 import tensorflow as tf
 import noir2color
 import warnings
+import matplotlib.pyplot as plt
 
 from tools import image_process
 
@@ -61,6 +62,12 @@ def model_test(meta, input_image=None, input_image_file=None, noise=True, z_dim=
     gen_img = image_process.scale(gen_img,
                                   original_range=(-1, 1),
                                   target_range=(0, 255))
+
+    # Show the image
+    if input_image is None and input_image_file is not None:
+        plt.axes('off')
+        plt.imshow(gen_img)
+        plt.show()
 
     # Close the session
     session.close()
