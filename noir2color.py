@@ -725,7 +725,12 @@ def build_and_train(epochs,
     # Number of epochs can be calculated from global_step // n_batches
 
     merged = tf.summary.merge_all()
-    writer = tf.summary.FileWriter(os.path.join('tensorboard', 'training'),
+    tensorboard = os.path.join('tensorboard', 'training')
+
+    while os.path.isdir(tensorboard):
+        tensorboard += '_'
+
+    writer = tf.summary.FileWriter(tensorboard,
                                    session.graph)
 
     session.run(tf.global_variables_initializer())
@@ -786,6 +791,8 @@ def build_and_train(epochs,
                               discriminator_loss, generator_loss))
             if batch_info['current_step'] % save_interval == 0:
                 if save_model:
+                    while os.path.isdir(save_model_to):
+                        save_model_to += '_'
                     saver.save(sess=session,
                                save_path=os.path.join(save_model_to, model_name),
                                global_step=current_step - 1)
