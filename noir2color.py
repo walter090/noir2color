@@ -725,7 +725,7 @@ def build_and_train(epochs,
     # Number of epochs can be calculated from global_step // n_batches
 
     merged = tf.summary.merge_all()
-    writer = tf.summary.FileWriter(os.path.join(save_model_to, 'tensorboard', 'training'),
+    writer = tf.summary.FileWriter(os.path.join('tensorboard', 'training'),
                                    session.graph)
 
     session.run(tf.global_variables_initializer())
