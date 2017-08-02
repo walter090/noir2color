@@ -733,8 +733,9 @@ def build_and_train(epochs,
     writer = tf.summary.FileWriter(tensorboard,
                                    session.graph)
 
-    session.run(tf.global_variables_initializer())
-    session.run(tf.local_variables_initializer())
+    if check_progress is None:
+        session.run(tf.global_variables_initializer())
+        session.run(tf.local_variables_initializer())
 
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord, sess=session)
