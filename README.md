@@ -6,8 +6,7 @@ This repo contain the project to train and test a conditional generative adversa
 ## Requirements
 This project is implemented with Tensorflow, to install the latest version of Tensorflow, follow the instructions on [this page](https://www.tensorflow.org/install/).
 
-##Usage
-
+## Usage
 ### Training
 To train on your own dataset, use
 ```commandline
