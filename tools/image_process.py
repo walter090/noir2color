@@ -9,6 +9,14 @@ from skimage.transform import resize
 from sklearn.preprocessing import MinMaxScaler
 
 
+def load_without_crop(image_file):
+    img = Image.open(image_file)
+    img.load()
+    img_as_list = np.asarray(img, dtype='int32').astype(np.uint8)
+
+    return img_as_list
+
+
 def load_image(image_file, output_size=(256, 256)):
     """Function for loading images.
     This function uses Pillow to load image from file and the image
