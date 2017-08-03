@@ -65,7 +65,7 @@ def load_image(image_file, output_size=(256, 256)):
         return cropped_img
 
     img = Image.open(image_file)
-    img = crop(img)
+    img = crop(img, output_size)
     img.load()
     img_as_list = np.asarray(img, dtype='int32').astype(np.uint8)
 
@@ -129,6 +129,20 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256), interval=1
             sys.stdout.write('.')
 
     print('Conversion complete')
+
+
+def output_image(output_from, output_to):
+    """Output an array as image
+
+    Args:
+        output_from: Array format of image
+        output_to: Image name
+
+    Returns:
+        None
+    """
+    img = Image.fromarray(output_from, 'RGB')
+    img.save(output_to)
 
 
 def scale(img, original_range=(0, 255), target_range=(-1, 1)):
