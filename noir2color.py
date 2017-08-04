@@ -584,6 +584,7 @@ def build_and_train(epochs,
                     colored_folder='img_np',
                     bw_folder='img_bw',
                     save_model_to='saved_model',
+                    save_tensorboard_to='training',
                     model_name='trained_model',
                     test_size=0.05,
                     noise=True,
@@ -725,7 +726,7 @@ def build_and_train(epochs,
     # Number of epochs can be calculated from global_step // n_batches
 
     merged = tf.summary.merge_all()
-    tensorboard = os.path.join('tensorboard', 'training')
+    tensorboard = os.path.join('tensorboard', save_tensorboard_to)
     writer = tf.summary.FileWriter(tensorboard,
                                    session.graph)
 
@@ -868,6 +869,7 @@ if __name__ == '__main__':
     parser.add_argument('--keep-prob', type=float, default=0.5, dest='keep_prob',
                         help='Keep probability for dropout in discriminator.')
     parser.add_argument('--progress', type=str, default=None, dest='check_progress')
+    parser.add_argument('--save-tb-to', type=str, default='training', dest='save_tensorboard_to')
 
     parser.set_defaults(noise=True, save_model=True)
 
@@ -883,6 +885,7 @@ if __name__ == '__main__':
                     colored_folder=args.colored_folder,
                     bw_folder=args.bw_folder,
                     save_model_to=args.save_model_to,
+                    save_tensorboard_to=args.save_tensorboard_to,
                     model_name=args.model_name,
                     test_size=args.test_size,
                     noise=args.noise,
