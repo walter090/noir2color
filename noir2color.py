@@ -734,7 +734,7 @@ def build_and_train(epochs,
     loss_gen_helper = tf.reduce_mean(
         tf.nn.l2_loss(generated - color_batch) / (image_size[0] * image_size[1])
     ) if helper_loss == 'l2' else tf.reduce_mean(
-        tf.abs(generated - color_batch) / (image_size[0] * image_size[1])
+        tf.abs(generated - color_batch)
     )
     loss_gen = loss_gen_gan * adversary_weight + loss_gen_helper * helper_weight
 
