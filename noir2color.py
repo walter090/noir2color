@@ -608,7 +608,7 @@ def redistribute(train, test, pickle_file):
 
     train_data = (train_features, train_targets)
 
-    return train_data, loaded_test
+    return tf.convert_to_tensor(train_data), tf.convert_to_tensor(loaded_test)
 
 
 def build_and_train(epochs,
