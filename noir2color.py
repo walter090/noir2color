@@ -572,6 +572,26 @@ def generator(input_x,
         return generated
 
 
+def redistribute(train, test, pickle_file):
+    """Load the output test data
+
+    This function is used for continuing training a trained model
+
+    Args:
+        pickle_file: Name of the pickle file
+
+    Returns:
+        List of test data
+    """
+    with open(pickle_file, 'rb') as input_f:
+        loaded_test = pickle_file.load(input_f)
+
+    all_data = train + test
+    train_data = [entry for entry in all_data if entry not in loaded_test]
+
+    return train_data, loaded_test
+
+
 def build_and_train(epochs,
                     verbose_interval=20,
                     save_interval=1000,
@@ -596,7 +616,8 @@ def build_and_train(epochs,
                     gen_lr=10e-5,
                     keep_prob=0.5,
                     summary_interval=50,
-                    check_progress=None):
+                    check_progress=None,
+                    test_pickle=None):
     """Build and train the graph
 
     Args:
@@ -612,6 +633,7 @@ def build_and_train(epochs,
         colored_folder: Directory of colored images.
         bw_folder: Directory of black and white images.
         save_model_to: Location to save the model to.
+        save_tensorboard_to: Dir to save to tensorboard summary.
         model_name: Name for the saved model.
         test_size: Split factor for test set, defaults 0.1
         noise: Set to True to add noise to the generator.
@@ -625,6 +647,7 @@ def build_and_train(epochs,
         summary_interval: Interval to keep a summary.
         check_progress: Set to the saved model path to continue
             training using saved variables. Defaults None.
+        test_pickle: Pickle file for previously saved test data.
 
     Returns:
         None
@@ -641,6 +664,10 @@ def build_and_train(epochs,
 
     train_data = input_files['train']  # train_data is a tuple
     test_data = input_files['test']  # test_data as well
+
+    if check_progress is not None:
+        # Redistribute training and testing set
+        train_data, test_data = redistribute(train_data, test_data, test_pickle)
 
     bw_batch, color_batch = input_pipeline(train_data,
                                            dim=image_size,
