@@ -897,6 +897,7 @@ if __name__ == '__main__':
                         help='Keep probability for dropout in discriminator.')
     parser.add_argument('--progress', type=str, default=None, dest='check_progress')
     parser.add_argument('--save-tb-to', type=str, default='training', dest='save_tensorboard_to')
+    parser.add_argument('--pickle', type=str, dest='test_pickle')
 
     parser.set_defaults(noise=True, save_model=True)
 
@@ -923,4 +924,5 @@ if __name__ == '__main__':
                     disc_lr=args.disc_lr,
                     gen_lr=args.gen_lr,
                     keep_prob=args.keep_prob,
-                    check_progress=args.check_progress)
+                    check_progress=args.check_progress,
+                    test_pickle=args.test_pickle)
