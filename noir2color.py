@@ -588,6 +588,9 @@ def redistribute(train, test, pickle_file):
     with open(pickle_file, 'rb') as input_f:
         loaded_test = pickle.load(input_f)
 
+    # TODO Remove this later
+    loaded_test = loaded_test[0]
+
     with tf.Session() as temp_session:
         train = temp_session.run(train)
         test = temp_session.run(test)
@@ -792,7 +795,6 @@ def build_and_train(epochs,
         'batch': bw_batch,
     }
 
-    test_data_ens = []  # List of batches of test data
     step = 0  # Initialize integer current step
     dumped = False  # Whether the test data has been dumped
 
@@ -836,12 +838,10 @@ def build_and_train(epochs,
                                save_path=os.path.join(save_model_to, model_name),
                                global_step=current_step - 1)
 
-            test_data_ens.append(batch_info['test_data'])
-
             # Output test data as a pickle
             if not dumped:
                 with open(os.path.join(save_model_to, 'test_data.pickle'), 'wb') as dumper:
-                    pickle.dump(test_data_ens, dumper)
+                    pickle.dump(batch_info['test_data'], dumper)
                 dumped = True
 
     except tf.errors.OutOfRangeError:
