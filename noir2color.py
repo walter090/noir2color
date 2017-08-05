@@ -588,9 +588,6 @@ def redistribute(train, test, pickle_file):
     with open(pickle_file, 'rb') as input_f:
         loaded_test = pickle.load(input_f)
 
-    # TODO Remove this later
-    loaded_test = loaded_test[0]
-
     with tf.Session() as temp_session:
         train = temp_session.run(train)
         test = temp_session.run(test)
@@ -920,6 +917,7 @@ if __name__ == '__main__':
     parser.add_argument('--progress', type=str, default=None, dest='check_progress')
     parser.add_argument('--save-tb-to', type=str, default='training', dest='save_tensorboard_to')
     parser.add_argument('--pickle', type=str, dest='test_pickle')
+    parser.add_argument('--helper-loss', type=str, dest='helper_loss')
 
     parser.set_defaults(noise=True, save_model=True)
 
@@ -947,4 +945,5 @@ if __name__ == '__main__':
                     gen_lr=args.gen_lr,
                     keep_prob=args.keep_prob,
                     check_progress=args.check_progress,
-                    test_pickle=args.test_pickle)
+                    test_pickle=args.test_pickle,
+                    helper_loss=args.helper_loss)
