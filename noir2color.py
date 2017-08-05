@@ -258,7 +258,7 @@ def batch_normalize(x, epsilon=1e-5):
 
 
 def file_sort(file_name):
-    return int(file_name.split('.')[0])
+    return int(file_name.split('.')[0].split('/')[-1])
 
 
 def process_data(color_folder, bw_folder, test_size=0.1):
