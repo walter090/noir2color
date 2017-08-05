@@ -584,7 +584,7 @@ def redistribute(train, test, pickle_file):
         List of test data
     """
     with open(pickle_file, 'rb') as input_f:
-        loaded_test = pickle_file.load(input_f)
+        loaded_test = pickle.load(input_f)
 
     all_data = train + test
     train_data = [entry for entry in all_data if entry not in loaded_test]
