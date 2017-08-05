@@ -596,10 +596,10 @@ def redistribute(train, test, pickle_file):
         test = temp_session.run(test)
 
     # Join up all entries and sort them so features and targets match up
-    all_features = train[0] + test[0]
+    all_features = np.append(train[0], test[0])
     all_features = sorted(all_features, key=file_sort)
 
-    all_targets = train[1] + test[1]
+    all_targets = np.append(train[1], test[1])
     all_targets = sorted(all_targets, key=file_sort)
 
     # Pick out entries from test data
