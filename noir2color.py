@@ -588,6 +588,10 @@ def redistribute(train, test, pickle_file):
     with open(pickle_file, 'rb') as input_f:
         loaded_test = pickle.load(input_f)
 
+    with tf.Session() as temp_session:
+        train = temp_session.run(train)
+        test = temp_session.run(test)
+
     # Join up all entries and sort them so features and targets match up
     all_features = train[0] + test[0]
     all_features = sorted(all_features, key=file_sort)
