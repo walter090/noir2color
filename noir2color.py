@@ -257,6 +257,10 @@ def batch_normalize(x, epsilon=1e-5):
         return normalized
 
 
+def file_sort(file_name):
+    return int(file_name.split('.')[0])
+
+
 def process_data(color_folder, bw_folder, test_size=0.1):
     """Read and partition data.
     This function should be run before the input pipeline.
@@ -269,10 +273,6 @@ def process_data(color_folder, bw_folder, test_size=0.1):
     Returns:
         A dictionary of tensors containing image file names.
     """
-
-    def file_sort(file_name):
-        return int(file_name.split('.')[0])
-
     img_list = [img for img in os.listdir(color_folder)
                 if not img.split('.')[0] == '']
     bw_img_list = [img for img in os.listdir(bw_folder)
@@ -578,6 +578,8 @@ def redistribute(train, test, pickle_file):
     This function is used for continuing training a trained model
 
     Args:
+        train: Train set, tuple
+        test: Test set, tuple
         pickle_file: Name of the pickle file
 
     Returns:
@@ -586,8 +588,18 @@ def redistribute(train, test, pickle_file):
     with open(pickle_file, 'rb') as input_f:
         loaded_test = pickle.load(input_f)
 
-    all_data = train + test
-    train_data = [entry for entry in all_data if entry not in loaded_test]
+    # Join up all entries and sort them so features and targets match up
+    all_features = train[0] + test[0]
+    all_features = sorted(all_features, key=file_sort)
+
+    all_targets = train[1] + test[1]
+    all_targets = sorted(all_targets, key=file_sort)
+
+    # Pick out entries from test data
+    train_features = [entry for entry in all_features if entry not in loaded_test[0]]
+    train_targets = [entry for entry in all_targets if entry not in loaded_test[1]]
+
+    train_data = (train_features, train_targets)
 
     return train_data, loaded_test
 
