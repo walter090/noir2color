@@ -606,9 +606,13 @@ def redistribute(train, test, pickle_file):
     train_features = [entry for entry in all_features if entry not in loaded_test[0]]
     train_targets = [entry for entry in all_targets if entry not in loaded_test[1]]
 
-    train_data = (train_features, train_targets)
+    train_data = (tf.convert_to_tensor(train_features),
+                  tf.convert_to_tensor(train_targets))
 
-    return tf.convert_to_tensor(train_data), tf.convert_to_tensor(loaded_test)
+    test_data = (tf.convert_to_tensor(loaded_test[0]),
+                 tf.convert_to_tensor(loaded_test[1]))
+
+    return train_data, test_data
 
 
 def build_and_train(epochs,
