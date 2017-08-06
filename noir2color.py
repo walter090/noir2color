@@ -840,7 +840,7 @@ def build_and_train(epochs,
                                global_step=current_step - 1)
 
             # Output test data as a pickle
-            if not dumped:
+            if not dumped and check_progress is None:
                 if not os.path.isdir(save_model_to):
                     os.mkdir(save_model_to)
                 with open(os.path.join(save_model_to, 'test_data.pickle'), 'wb') as dumper:
