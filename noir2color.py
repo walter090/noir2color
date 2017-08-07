@@ -629,7 +629,7 @@ def build_and_train(epochs,
                     test_size=0.05,
                     noise=True,
                     z_dim=100,
-                    helper_loss='l1',
+                    helper_loss=None,
                     adversary_weight=0.5,
                     helper_weight=0.5,
                     disc_lr=10e-5,
@@ -731,11 +731,14 @@ def build_and_train(epochs,
     )
     # Loss by L1 or L2, per pixel loss
     # Loss compared to true image
-    loss_gen_helper = tf.reduce_mean(
-        tf.nn.l2_loss(generated - color_batch) / (image_size[0] * image_size[1])
-    ) if helper_loss == 'l2' else tf.reduce_mean(
-        tf.abs(generated - color_batch)
-    )
+    if helper_loss is None:
+        loss_gen_helper = 0
+    else:
+        loss_gen_helper = tf.reduce_mean(
+            tf.nn.l2_loss(generated - color_batch) / (image_size[0] * image_size[1])
+        ) if helper_loss == 'l2' else tf.reduce_mean(
+            tf.abs(generated - color_batch)
+        )
     loss_gen = loss_gen_gan * adversary_weight + loss_gen_helper * helper_weight
 
     tf.summary.scalar('real prob', tf.reduce_mean(real_prob))
@@ -917,7 +920,7 @@ if __name__ == '__main__':
     parser.add_argument('--progress', type=str, default=None, dest='check_progress')
     parser.add_argument('--save-tb-to', type=str, default='training', dest='save_tensorboard_to')
     parser.add_argument('--pickle', type=str, dest='test_pickle')
-    parser.add_argument('--helper-loss', type=str, dest='helper_loss')
+    parser.add_argument('--helper-loss', type=str, dest='helper_loss', default=None)
 
     parser.set_defaults(noise=True, save_model=True)
 
