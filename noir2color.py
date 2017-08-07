@@ -921,6 +921,7 @@ if __name__ == '__main__':
     parser.add_argument('--save-tb-to', type=str, default='training', dest='save_tensorboard_to')
     parser.add_argument('--pickle', type=str, dest='test_pickle')
     parser.add_argument('--helper-loss', type=str, dest='helper_loss', default=None)
+    parser.add_argument('--sum-interval', type=int, dest='summary_interval', default=50)
 
     parser.set_defaults(noise=True, save_model=True)
 
@@ -949,4 +950,5 @@ if __name__ == '__main__':
                     keep_prob=args.keep_prob,
                     check_progress=args.check_progress,
                     test_pickle=args.test_pickle,
-                    helper_loss=args.helper_loss)
+                    helper_loss=args.helper_loss,
+                    summary_interval=args.summary_interval)
