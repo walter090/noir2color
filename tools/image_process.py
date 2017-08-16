@@ -107,6 +107,7 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256), interval=1
         os.mkdir(bw_dest)
 
     # Auto incremental id for images
+    print('Converting images', end='...')
     for index, img in enumerate(img_list):
         try:
             img_asarray = load_image(os.path.join(folder, img), size)
@@ -124,7 +125,6 @@ def convert(folder, dest='img_np', bw_dest='img_bw', size=(256, 256), interval=1
         scipy.misc.toimage(img_asarray).save(os.path.join(dest, str(index)) + extension)
         scipy.misc.toimage(img_bw).save(os.path.join(bw_dest, str(index)) + extension)
 
-        print('Converting images')
         if index % interval == 0:
             sys.stdout.write('.')
 
