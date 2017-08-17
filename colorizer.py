@@ -1,14 +1,13 @@
-import tensorflow as tf
-import noir2color
 import warnings
-import matplotlib.pyplot as plt
-import numpy as np
-import os
 
+import numpy as np
+import tensorflow as tf
+
+import noir2color
 from tools import image_process
 
 
-def test_score(output, target, score='l2'):
+def test_score(output, target, score='l1'):
     """Computes the test score of the generated images.
 
     Args:
@@ -28,27 +27,6 @@ def test_score(output, target, score='l2'):
         raise ValueError('No such option, choose between l1 and l2')
 
     return per_pixel_score
-
-
-def test_en_masse(data_dir, test_list, score='l2'):
-    """Computes the test score of the germinated images.
-    This function serves a similar purpose as test_score, except it
-    can be used to score the model on a large test_set.
-
-    Args:
-        data_dir: Directory where dataset is.
-        test_list: List of test data entries.
-
-    Returns:
-        Test score
-    """
-    target_files = test_list[1]
-
-    score_list = []
-    for file_i in range(target_files):
-        score_list.append(
-
-        )
 
 
 def model_test(meta,
@@ -93,61 +71,52 @@ def model_test(meta,
         raise ValueError('No image provided.')
 
     # Check if input_image contains multiple images
+    input_image = np.array(input_image)
     shape = input_image.shape
-    # size = shape[0] if len(shape) == 3 else 1
 
-    if len(shape) < 3:
-        # If only one image is fed, convert to 3d
-        input_image = np.reshape(input_image, (1, shape[0], shape[1]))
+    if len(shape) == 3:
+        size = shape[0]
+        shape = (shape[1], shape[2])
+    else:
+        size = 1
 
     # Preprocess input image(s)
-    # There is not enough memory to generate too many image in one batch,
-    # generate them one by one.
-    gen_list = []  # A list of generated images
-    for image in input_image:
-        base_img = tf.cast(tf.convert_to_tensor(image), dtype=tf.float32)
-        base_img = noir2color.scale(base_img)
-        base_img = tf.reshape(base_img, [1, shape[0], shape[1], 1])
+    base_img = tf.cast(tf.convert_to_tensor(input_image), dtype=tf.float32)
+    base_img = noir2color.scale(base_img)
+    base_img = tf.reshape(base_img, [size, shape[0], shape[1], 1])
 
-        gen_tensor = noir2color.generator(input_x=base_img,
-                                          testing=True,
-                                          noise=noise,
-                                          z_dim=z_dim,
-                                          skip_conn=skip_conn)
-        gen_list.append(gen_tensor)
+    gen_tensor = noir2color.generator(input_x=base_img,
+                                      testing=True,
+                                      noise=noise,
+                                      z_dim=z_dim,
+                                      skip_conn=skip_conn)
 
     # Reuse restored variables
     tf.get_variable_scope().reuse_variables()
 
-    saver = tf.train.Saver()
-    saver.restore(session, meta)
+    if meta is not None:
+        saver = tf.train.Saver()
+        saver.restore(session, meta)
+    else:
+        session.run(tf.global_variables_initializer())
 
     # Get generated image(s)
-    gen_images = session.run(gen_list)
-    gen_images = np.array(gen_images)
-    gen_images = np.reshape(gen_images, (gen_images.shape[0],
-                                         gen_images.shape[2],
-                                         gen_images.shape[3],
-                                         gen_images.shape[4]))
+    gen_images = session.run(gen_tensor)
 
     # Scale the image to RGB format.
     gen_images = image_process.scale(gen_images,
                                      original_range=(-1, 1),
                                      target_range=(0, 255))
 
-    # Show the image
-    # if input_image is None and input_image_file is not None:
-    #     plt.axes('off')
-    #     plt.imshow(gen_images)
-    #     plt.show()
-
+    score = None
     if input_target is not None:
-        print('Score: {}'.format(test_score(gen_images, input_target)))
+        score = test_score(gen_images, input_target)
+        print('Score: {}'.format(score))
 
     # Close the session
     session.close()
 
-    return gen_images
+    return gen_images, score
 
 
 if __name__ == '__main__':
