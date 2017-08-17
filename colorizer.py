@@ -3,24 +3,52 @@ import noir2color
 import warnings
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 from tools import image_process
 
 
-def test_score(output, target):
-    """Computes the test score of the generated images
+def test_score(output, target, score='l2'):
+    """Computes the test score of the generated images.
 
     Args:
-        output: An array presentation of generated images
-        target: An array presentation of target images
+        output: An array presentation of generated images.
+        target: An array presentation of target images.
+        score: Scoring method, defaults l2
 
     Returns:
         Test score
     """
     diff = np.abs(target - output)
-    per_pixel_l1 = np.mean(diff)
+    if score == 'l1':
+        per_pixel_score = np.mean(diff)
+    elif score == 'l2':
+        per_pixel_score = np.mean([entry ** 2 for entry in diff])
+    else:
+        raise ValueError('No such option, choose between l1 and l2')
 
-    return per_pixel_l1
+    return per_pixel_score
+
+
+def test_en_masse(data_dir, test_list, score='l2'):
+    """Computes the test score of the germinated images.
+    This function serves a similar purpose as test_score, except it
+    can be used to score the model on a large test_set.
+
+    Args:
+        data_dir: Directory where dataset is.
+        test_list: List of test data entries.
+
+    Returns:
+        Test score
+    """
+    target_files = test_list[1]
+
+    score_list = []
+    for file_i in range(target_files):
+        score_list.append(
+
+        )
 
 
 def model_test(meta,
@@ -46,11 +74,11 @@ def model_test(meta,
             input_image is provided. This argument is present for when the user
             decides to run this function in the terminal.
         noise: Set True to add noise to the model. Set this argument according to
-             the saved variables.
+            the saved variables.
         z_dim: Depth of the noise. Set this argument according to the saved variables.
 
     Returns:
-        gen_img: Colorized image(s)
+        gen_images: Colorized image(s)
     """
     session = tf.Session()
 
@@ -66,18 +94,28 @@ def model_test(meta,
 
     # Check if input_image contains multiple images
     shape = input_image.shape
-    size = shape[0] if len(shape) == 3 else 1
+    # size = shape[0] if len(shape) == 3 else 1
+
+    if len(shape) < 3:
+        # If only one image is fed, convert to 3d
+        input_image = np.reshape(input_image, (1, shape[0], shape[1]))
 
     # Preprocess input image(s)
-    base_img = tf.cast(tf.convert_to_tensor(input_image), dtype=tf.float32)
-    base_img = noir2color.scale(base_img)
-    base_img = tf.reshape(base_img, [size, shape[0], shape[1], 1])
+    # There is not enough memory to generate too many image in one batch,
+    # generate them one by one.
+    gen_list = []  # A list of generated images
+    for image in input_image:
+        base_img = tf.cast(tf.convert_to_tensor(image), dtype=tf.float32)
+        base_img = noir2color.scale(base_img)
+        base_img = tf.reshape(base_img, [1, shape[0], shape[1], 1])
 
-    gen_tensor = noir2color.generator(input_x=base_img,
-                                      testing=True,
-                                      noise=noise,
-                                      z_dim=z_dim,
-                                      skip_conn=skip_conn)
+        gen_tensor = noir2color.generator(input_x=base_img,
+                                          testing=True,
+                                          noise=noise,
+                                          z_dim=z_dim,
+                                          skip_conn=skip_conn)
+        gen_list.append(gen_tensor)
+
     # Reuse restored variables
     tf.get_variable_scope().reuse_variables()
 
@@ -85,26 +123,32 @@ def model_test(meta,
     saver.restore(session, meta)
 
     # Get generated image(s)
-    gen_img = session.run(gen_tensor)
+    gen_images = session.run(gen_list)
+    gen_images = np.array(gen_images)
+    gen_images = np.reshape(gen_images, (gen_images.shape[0],
+                                         gen_images.shape[2],
+                                         gen_images.shape[3],
+                                         gen_images.shape[4]))
 
     # Scale the image to RGB format.
-    gen_img = image_process.scale(gen_img,
-                                  original_range=(-1, 1),
-                                  target_range=(0, 255))
+    gen_images = image_process.scale(gen_images,
+                                     original_range=(-1, 1),
+                                     target_range=(0, 255))
 
     # Show the image
-    if input_image is None and input_image_file is not None:
-        plt.axes('off')
-        plt.imshow(gen_img)
-        plt.show()
+    # if input_image is None and input_image_file is not None:
+    #     plt.axes('off')
+    #     plt.imshow(gen_images)
+    #     plt.show()
 
     if input_target is not None:
-        print('Score: {}'.format(test_score(gen_img, input_target)))
+        print('Score: {}'.format(test_score(gen_images, input_target)))
 
     # Close the session
     session.close()
 
-    return gen_img
+    return gen_images
+
 
 if __name__ == '__main__':
     import argparse
