@@ -9,20 +9,29 @@ from skimage.transform import resize
 from sklearn.preprocessing import MinMaxScaler
 
 
-def load_without_crop(image_file):
+def load_without_crop(image_files):
     """Load a image file as ndarray without cropping it.
 
     Args:
-        image_file: Name of the image file
+        image_files: Names of the image files
 
     Returns:
         Image as ndarray
     """
-    img = Image.open(image_file)
-    img.load()
-    img_as_list = np.asarray(img, dtype='int32').astype(np.uint8)
+    def load_file(file):
+        img = Image.open(file)
+        img.load()
+        img_as_list = np.asarray(img, dtype='int32').astype(np.uint8)
+        return img_as_list
 
-    return img_as_list
+    images = []
+    if not image_files.__class__ == str:
+        for image_file in image_files:
+            images.append(load_file(image_file))
+    else:
+        images.append(load_file(image_files))
+
+    return images[0] if len(images) == 1 else images
 
 
 def load_image(image_file, output_size=(256, 256)):
