@@ -23,8 +23,13 @@ def test_score(output, target):
     return per_pixel_l1
 
 
-def model_test(meta, input_image=None, input_target=None,
-               input_image_file=None, noise=True, z_dim=100):
+def model_test(meta,
+               skip_conn=True,
+               input_image=None,
+               input_target=None,
+               input_image_file=None,
+               noise=True,
+               z_dim=100):
     """Use the trained generator
 
     Function for using the trained generator, loads the trained weights and biases
@@ -32,6 +37,7 @@ def model_test(meta, input_image=None, input_target=None,
 
     Args:
         meta: string, checkpoint file
+        skip_conn: Set True to use skip connection in generator.
         input_image: 2-D or 3-D array, a single or list of input images.
         input_target: Optional target images for input, if provided, print
             the score.
@@ -67,8 +73,11 @@ def model_test(meta, input_image=None, input_target=None,
     base_img = noir2color.scale(base_img)
     base_img = tf.reshape(base_img, [size, shape[0], shape[1], 1])
 
-    gen_tensor = noir2color.generator(input_x=base_img, testing=True,
-                                      noise=noise, z_dim=z_dim)
+    gen_tensor = noir2color.generator(input_x=base_img,
+                                      testing=True,
+                                      noise=noise,
+                                      z_dim=z_dim,
+                                      skip_conn=skip_conn)
     # Reuse restored variables
     tf.get_variable_scope().reuse_variables()
 
