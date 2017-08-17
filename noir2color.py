@@ -635,8 +635,8 @@ def build_and_train(epochs,
                     helper_loss=None,
                     adversary_weight=0.5,
                     helper_weight=0.5,
-                    disc_lr=10e-5,
-                    gen_lr=10e-5,
+                    disc_lr=10e-4,
+                    gen_lr=10e-4,
                     keep_prob=0.5,
                     summary_interval=50,
                     check_progress=None,
@@ -926,9 +926,9 @@ if __name__ == '__main__':
     parser.add_argument('--helper-weight', type=float, default=0.5, dest='helper_weight',
                         help='Weight for l2 loss.')
     parser.add_argument('--epsilon', type=float, default=10e-12, dest='epsilon')
-    parser.add_argument('--disc-lr', type=float, default=10e-5, dest='disc_lr',
+    parser.add_argument('--disc-lr', type=float, default=10e-4, dest='disc_lr',
                         help='Learning rate for discriminator optimizer.')
-    parser.add_argument('--gen-lr', type=float, default=10e-5, dest='gen_lr',
+    parser.add_argument('--gen-lr', type=float, default=10e-4, dest='gen_lr',
                         help='Learning rate for generator optimizer.')
     parser.add_argument('--keep-prob', type=float, default=0.5, dest='keep_prob',
                         help='Keep probability for dropout in discriminator.')
