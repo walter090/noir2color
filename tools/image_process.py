@@ -10,6 +10,14 @@ from sklearn.preprocessing import MinMaxScaler
 
 
 def load_without_crop(image_file):
+    """Load a image file as ndarray without cropping it.
+
+    Args:
+        image_file: Name of the image file
+
+    Returns:
+        Image as ndarray
+    """
     img = Image.open(image_file)
     img.load()
     img_as_list = np.asarray(img, dtype='int32').astype(np.uint8)
