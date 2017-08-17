@@ -14,7 +14,7 @@ python noir2color.py --bw-folder bw --colored-folder color
 ```
 You can also set other parameters using the command line, for example
 ```commandline
-python noir2color.py --keep-prob 0.75
+python noir2color.py --keep-prob 0.5
 ```
 For information about specifying other parameters, type
 ```commandline
@@ -28,3 +28,6 @@ To colorize one single image, use
 ```commandline
 python colorizer.py --meta dir/to/saved/model --input input_image.jpg
 ```
+
+### Models and Datasets
+The trained models are saved at [this repo](https://github.com/walter090/saved_models), and datasets at [this repo](https://github.com/walter090/datasets).
