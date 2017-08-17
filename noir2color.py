@@ -261,7 +261,7 @@ def file_sort(file_name):
     return int(file_name.split('.')[0].split('/')[-1])
 
 
-def process_data(color_folder, bw_folder, test_size=0.1):
+def process_data(color_folder, bw_folder, test_size=0.05):
     """Read and partition data.
     This function should be run before the input pipeline.
 
@@ -273,13 +273,16 @@ def process_data(color_folder, bw_folder, test_size=0.1):
     Returns:
         A dictionary of tensors containing image file names.
     """
+    # Filter out hidden files whose name start with '.' added by FloydHub
     img_list = [img for img in os.listdir(color_folder)
                 if not img.split('.')[0] == '']
     bw_img_list = [img for img in os.listdir(bw_folder)
                    if not img.split('.')[0] == '']
 
+    # Sort the image names so the features and targets can match up
     img_list = sorted(img_list, key=file_sort)
     bw_img_list = sorted(bw_img_list, key=file_sort)
+    # Add directory to the file name
     img_list = [os.path.join(color_folder, img) for img in img_list]
     bw_img_list = [os.path.join(bw_folder, img) for img in bw_img_list]
 
@@ -575,7 +578,7 @@ def generator(input_x,
 def redistribute(train, test, pickle_file):
     """Load the output test data
 
-    This function is used for continuing training a trained model
+    This function is used for continuing training a trained model.
 
     Args:
         train: Train set, tuple
@@ -637,7 +640,9 @@ def build_and_train(epochs,
                     keep_prob=0.5,
                     summary_interval=50,
                     check_progress=None,
-                    test_pickle=None):
+                    test_pickle=None,
+                    skip_conn=True,
+                    gen_dropout=True):
     """Build and train the graph
 
     Args:
@@ -668,6 +673,8 @@ def build_and_train(epochs,
         check_progress: Set to the saved model path to continue
             training using saved variables. Defaults None.
         test_pickle: Pickle file for previously saved test data.
+        skip_conn: Set True to use skip connections in generator.
+        gen_dropout: Set True to use dropout in generator.
 
     Returns:
         None
@@ -699,7 +706,9 @@ def build_and_train(epochs,
                           name=generator_scope,
                           noise=noise,
                           z_dim=z_dim,
-                          batchnorm=batchnorm)
+                          batchnorm=batchnorm,
+                          skip_conn=skip_conn,
+                          testing=not gen_dropout)
     # Discriminator probability for real images
     logits_real, real_prob = discriminator(input_x=color_batch,
                                            batchnorm=batchnorm,
@@ -904,6 +913,12 @@ if __name__ == '__main__':
     noise_group.add_argument('--no-noise', action='store_false', dest='noise',
                              help='Do not add noise to input image.')
 
+    skip_group = parser.add_mutually_exclusive_group()
+    skip_group.add_argument('--add-skip', action='store_true', dest='skip_conn',
+                            help='Use skip connection in generator.')
+    skip_group.add_argument('--no-skip', action='store_false', dest='skip_conn',
+                            help='Do not use skip connection in generator.')
+
     parser.add_argument('--z-dim', type=int, default=100, dest='z_dim',
                         help='Noise dimension')
     parser.add_argument('--adversary-weight', type=float, default=0.5, dest='adversary_weight',
@@ -951,4 +966,5 @@ if __name__ == '__main__':
                     check_progress=args.check_progress,
                     test_pickle=args.test_pickle,
                     helper_loss=args.helper_loss,
-                    summary_interval=args.summary_interval)
+                    summary_interval=args.summary_interval,
+                    skip_conn=args.skip_conn)
