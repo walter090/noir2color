@@ -1,4 +1,4 @@
-# noir2color
+# Noir2Color
 ![f](./readme_img/img_1.png?raw=true)
 
 ## Introduction
