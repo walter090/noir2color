@@ -685,21 +685,22 @@ def build_and_train(epochs,
     session = tf.Session()
 
     # Start input pipeline
-    input_files, dataset_size = process_data(color_folder=colored_folder,
-                                             bw_folder=bw_folder,
-                                             test_size=test_size)
+    with tf.device('/cpu:0'):
+        input_files, dataset_size = process_data(color_folder=colored_folder,
+                                                 bw_folder=bw_folder,
+                                                 test_size=test_size)
 
-    train_data = input_files['train']  # train_data is a tuple
-    test_data = input_files['test']  # test_data as well
+        train_data = input_files['train']  # train_data is a tuple
+        test_data = input_files['test']  # test_data as well
 
-    if check_progress is not None:
-        # Redistribute training and testing set
-        train_data, test_data = redistribute(train_data, test_data, test_pickle)
+        if check_progress is not None:
+            # Redistribute training and testing set
+            train_data, test_data = redistribute(train_data, test_data, test_pickle)
 
-    bw_batch, color_batch = input_pipeline(train_data,
-                                           dim=image_size,
-                                           batch_size=batch_size,
-                                           epochs=epochs)
+        bw_batch, color_batch = input_pipeline(train_data,
+                                               dim=image_size,
+                                               batch_size=batch_size,
+                                               epochs=epochs)
 
     # Generated image
     generated = generator(input_x=bw_batch,
